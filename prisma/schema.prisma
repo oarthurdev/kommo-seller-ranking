@@ -1,0 +1,287 @@
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model activities {
+  id                   String     @id
+  lead_id              BigInt?
+  user_id              BigInt?
+  tipo                 String?
+  valor_anterior       String?
+  valor_novo           String?
+  criado_em            DateTime?  @db.Timestamp(6)
+  dia_semana           String?
+  hora                 Int?
+  updated_at           DateTime?  @default(now()) @db.Timestamp(6)
+  company_id           String?    @db.Uuid
+  status_anterior      String?    @db.VarChar
+  status_novo          String?    @db.VarChar
+  texto_mensagem       String?    @db.VarChar
+  fonte_mensagem       String?    @db.VarChar
+  texto_tarefa         String?    @db.VarChar
+  tipo_tarefa          String?    @db.VarChar
+  texto_nota           String?    @db.VarChar
+  duracao_chamada      String?    @db.VarChar
+  resultado_chamada    String?    @db.VarChar
+  texto_sms            String?    @db.VarChar
+  responsavel_anterior String?    @db.VarChar
+  responsavel_novo     String?    @db.VarChar
+  nome_tag             String?    @db.VarChar
+  entity_type          String?    @db.VarChar
+  entity_id            String?    @db.VarChar
+  brokers              brokers?   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_activities_broker")
+  companies            companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_activities_company")
+  leads                leads?     @relation(fields: [lead_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_activities_lead")
+}
+
+model broker_points {
+  id                 BigInt     @id
+  nome               String
+  pontos             Int?       @default(0)
+  leads_visitados    Int?       @default(0)
+  propostas_enviadas Int?       @default(0)
+  vendas_realizadas  Int?       @default(0)
+  leads_perdidos     Int?       @default(0)
+  updated_at         DateTime?  @default(now()) @db.Timestamp(6)
+  company_id         String?    @db.Uuid
+  brokers            brokers    @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bp_broker")
+  companies          companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bp_company")
+}
+
+model brokers {
+  id            BigInt         @id
+  nome          String
+  email         String?
+  foto_url      String?
+  cargo         String?
+  criado_em     DateTime?      @db.Timestamp(6)
+  updated_at    DateTime?      @default(now()) @db.Timestamp(6)
+  active        Boolean?       @default(true)
+  company_id    String?        @db.Uuid
+  activities    activities[]
+  broker_points broker_points?
+  companies     companies?     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_brokers_company")
+  leads         leads[]
+}
+
+model companies {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String
+  subdomain         String              @unique(map: "companies_subdomain_unique")
+  created_at        DateTime?           @default(now()) @db.Timestamp(6)
+  activities        activities[]
+  broker_points     broker_points[]
+  brokers           brokers[]
+  company_branding  company_branding?
+  company_rules     company_rules[]
+  component_filters component_filters[]
+  custom_rules      custom_rules[]
+  dynamic_metrics   dynamic_metrics[]
+  kommo_config      kommo_config[]
+  leads             leads[]
+  metric_results    metric_results[]
+  sync_logs         sync_logs[]
+}
+
+model company_branding {
+  id                   Int       @id @default(autoincrement())
+  company_id           String    @unique @db.Uuid
+  primary_color        String?   @default("#3b82f6")
+  secondary_color      String?   @default("#1e40af")
+  accent_color         String?   @default("#22c55e")
+  logo_url             String?
+  favicon_url          String?
+  company_name_display String?
+  dashboard_title      String?   @default("Ranking de Corretores")
+  theme_mode           String?   @default("light")
+  created_at           DateTime? @default(now()) @db.Timestamp(6)
+  updated_at           DateTime? @default(now()) @db.Timestamp(6)
+  companies            companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model company_rules {
+  id         Int       @id @default(autoincrement())
+  company_id String    @db.Uuid
+  rule_id    Int
+  pontos     Int
+  active     Boolean?  @default(true)
+  created_at DateTime? @default(now()) @db.Timestamp(6)
+  updated_at DateTime? @default(now()) @db.Timestamp(6)
+  companies  companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "company_rules_company_id_companies_id_fk")
+  rules      rules     @relation(fields: [rule_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "company_rules_rule_id_rules_id_fk")
+}
+
+model component_filters {
+  id             Int       @id @default(autoincrement())
+  company_id     String    @db.Uuid
+  component_name String    @db.VarChar(100)
+  filter_type    String    @db.VarChar(50)
+  start_date     DateTime? @db.Timestamp(6)
+  end_date       DateTime? @db.Timestamp(6)
+  created_at     DateTime? @default(now()) @db.Timestamp(6)
+  updated_at     DateTime? @default(now()) @db.Timestamp(6)
+  companies      companies @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_component_company")
+
+  @@unique([company_id, component_name], map: "component_filters_company_component_unique")
+}
+
+model custom_rules {
+  id          Int       @id
+  company_id  String    @db.Uuid
+  nome        String
+  coluna_nome String
+  pontos      Int
+  descricao   String?
+  active      Boolean?  @default(true)
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+  companies   companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "custom_rules_company_id_companies_id_fk")
+}
+
+model dynamic_metrics {
+  id                  Int              @id @default(autoincrement())
+  company_id          String           @db.Uuid
+  nome                String
+  pipeline_stage_id   Int
+  pipeline_stage_name String
+  valor_minimo        Int
+  cor_sucesso         String?          @default("#22c55e")
+  cor_alerta          String?          @default("#ef4444")
+  active              Boolean?         @default(true)
+  created_at          DateTime?        @default(now()) @db.Timestamp(6)
+  updated_at          DateTime?        @default(now()) @db.Timestamp(6)
+  companies           companies        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  metric_results      metric_results[]
+}
+
+model from_webhook {
+  id                Int       @id @default(autoincrement())
+  webhook_type      String?
+  payload_id        String?
+  chat_id           String?
+  talk_id           String?
+  contact_id        String?
+  text              String?
+  created_at        String?
+  element_type      String?
+  entity_type       String?
+  element_id        String?
+  entity_id         String?
+  message_type      String?
+  author_id         String?
+  author_type       String?
+  author_name       String?
+  author_avatar_url String?
+  origin            String?
+  raw_payload       Json?
+  broker_id         String?
+  lead_id           String?
+  inserted_at       DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model kommo_config {
+  id               BigInt     @id @default(autoincrement())
+  api_url          String?    @default("http://dicasaindaial.kommo.com/") @db.VarChar
+  access_token     String?    @default("eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiIsImp0a...") @db.VarChar
+  custom_endpoint  String?    @db.VarChar
+  sync_interval    Int?
+  last_sync        DateTime?  @db.Timestamp(6)
+  next_sync        DateTime?  @db.Timestamp(6)
+  created_at       DateTime?  @default(now()) @db.Timestamptz(6)
+  sync_start_date  Decimal?   @db.Decimal
+  sync_end_date    Decimal?   @db.Decimal
+  active           Boolean?   @default(true)
+  company_id       String?    @db.Uuid
+  pipeline_id      Json?
+  client_id        String?    @db.VarChar
+  client_secret    String?    @db.VarChar
+  refresh_token    String?    @db.VarChar
+  token_expires_at DateTime?  @db.Date
+  updated_at       DateTime?  @db.Timestamp(6)
+  companies        companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kc_company")
+}
+
+model leads {
+  id             BigInt       @id
+  nome           String
+  responsavel_id BigInt?
+  contato_nome   String?
+  valor          Decimal?     @db.Decimal
+  status_id      BigInt?
+  pipeline_id    BigInt?
+  etapa          String?
+  criado_em      DateTime?    @db.Timestamp(6)
+  atualizado_em  DateTime?    @db.Timestamp(6)
+  fechado        Boolean?     @default(false)
+  status         String?
+  updated_at     DateTime?    @default(now()) @db.Timestamp(6)
+  company_id     String?      @db.Uuid
+  activities     activities[]
+  brokers        brokers?     @relation(fields: [responsavel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_broker")
+  companies      companies?   @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_company")
+}
+
+model metric_results {
+  id                 Int             @id @default(autoincrement())
+  dynamic_metric_id  Int
+  company_id         String          @db.Uuid
+  valor_atual        Int
+  status             String
+  periodo_referencia String?
+  leads_count        Int             @default(0)
+  atingiu_meta       Boolean         @default(false)
+  calculado_em       DateTime?       @default(now()) @db.Timestamp(6)
+  created_at         DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at         DateTime?       @default(now()) @db.Timestamp(6)
+  companies          companies       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  dynamic_metrics    dynamic_metrics @relation(fields: [dynamic_metric_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model rules {
+  id            Int             @id @default(autoincrement())
+  nome          String
+  pontos        Int
+  coluna_nome   String          @unique(map: "rules_coluna_nome_unique")
+  created_at    DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at    DateTime?       @default(now()) @db.Timestamp(6)
+  descricao     String?
+  company_rules company_rules[]
+}
+
+model sync_control {
+  company_id String    @id @db.Uuid
+  last_sync  DateTime? @db.Timestamptz(6)
+  next_sync  DateTime? @db.Timestamptz(6)
+  status     String?
+  error      String?
+}
+
+model sync_logs {
+  id         Int        @id
+  company_id String?    @db.Uuid
+  timestamp  DateTime?  @default(now()) @db.Timestamp(6)
+  type       String
+  message    String
+  companies  companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sync_logs_company_id_companies_id_fk")
+}
+
+model weekly_logs {
+  id           String    @id @db.Uuid
+  week_start   DateTime? @db.Timestamp(6)
+  week_end     DateTime? @db.Timestamp(6)
+  company_id   String?   @db.Uuid
+  total_leads  Int?
+  total_points Int?
+  created_at   DateTime? @db.Timestamp(6)
+}
+
+enum Role {
+  USER
+  ADMIN
+}
