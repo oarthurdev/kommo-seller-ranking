@@ -204,19 +204,23 @@ export async function getBrokerRankings(
     // Filtrar resultados null (corretores com datas inválidas)
     let rankings = rankingsResults.filter((result) => result !== null);
 
-    // Separar corretores com pontos > 0 e pontos = 0
-    const brokersWithPoints = rankings.filter((broker) => broker.pontos !== 0);
-    const brokersWithoutPoints = rankings.filter(
-      (broker) => broker.pontos === 0,
-    );
+    // Separar corretores por tipo de pontuação
+    const brokersWithPositivePoints = rankings.filter((broker) => broker.pontos > 0);
+    const brokersWithNegativePoints = rankings.filter((broker) => broker.pontos < 0);
+    const brokersWithZeroPoints = rankings.filter((broker) => broker.pontos === 0);
 
-    // Ordenar corretores sem pontos por total_leads (descendente)
-    brokersWithoutPoints.sort(
-      (a, b) => (b.total_leads || 0) - (a.total_leads || 0),
-    );
+    // Ordenar cada grupo
+    brokersWithPositivePoints.sort((a, b) => b.pontos - a.pontos); // Positivos: maior para menor
+    brokersWithNegativePoints.sort((a, b) => b.pontos - a.pontos); // Negativos: menos negativo para mais negativo
+    brokersWithZeroPoints.sort((a, b) => (b.total_leads || 0) - (a.total_leads || 0)); // Zero: por leads capturados
 
-    // Combinar: primeiro os com pontos (já ordenados por pontos), depois os sem pontos (ordenados por leads)
-    rankings = [...brokersWithPoints, ...brokersWithoutPoints];
+    // Se nenhum corretor tiver pontos (todos têm 0), ordenar apenas por leads capturados
+    if (brokersWithPositivePoints.length === 0 && brokersWithNegativePoints.length === 0) {
+      rankings = brokersWithZeroPoints;
+    } else {
+      // Combinar: positivos, negativos, depois zeros
+      rankings = [...brokersWithPositivePoints, ...brokersWithNegativePoints, ...brokersWithZeroPoints];
+    }
 
     return rankings;
   } catch (error) {
