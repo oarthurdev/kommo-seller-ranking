@@ -156,8 +156,8 @@ export async function getBrokerRankings(
         // Get current points from broker_points table - SEMPRE do mês atual para pontos
         const { data: pointsData } = await supabase
           .from("broker_points")
-          .select("pontos, vendas_realizadas, leads_perdidos")
-          .eq("broker_id", item.id)
+          .select("id, pontos, vendas_realizadas, leads_perdidos")
+          .eq("id", item.id)
           .eq("company_id", companyId)
           .gte("updated_at", currentMonthStart.toISOString())
           .lte("updated_at", currentMonthEnd.toISOString())
@@ -425,17 +425,12 @@ export async function getBrokerTotalLeadsLastMonth(
 }
 
 export async function getBrokerPoints(
-  brokerId: number | null,
+  brokerId: number,
   companyId: string,
   startDate?: string,
   endDate?: string,
   allPipelines: boolean = false,
 ) {
-  // If brokerId is null, return all brokers with points (same as getBrokerRankings)
-  if (brokerId === null) {
-    return getBrokerRankings(companyId);
-  }
-
   let query = supabase
     .from("broker_points")
     .select("*")
@@ -2448,18 +2443,6 @@ export async function getBrokerWeeklyPerformanceMetrics(
 
     console.log(`Leads capturados: ${leadsCapturados}`);
 
-    // 2. VENDAS FECHADAS - leads com status_id = 142
-    const vendasFechadas = leads.filter(
-      (lead) => lead.status_id === 142,
-    ).length;
-    console.log(`Vendas fechadas: ${vendasFechadas}`);
-
-    // 3. OPORTUNIDADES PERDIDAS - leads com status_id = 143
-    const oportunidadesPerdidas = leads.filter(
-      (lead) => lead.status_id === 143,
-    ).length;
-    console.log(`Oportunidades perdidas: ${oportunidadesPerdidas}`);
-
     // 4. PROPOSTAS ENVIADAS - buscar leads com etapa que começa com "proposta"
     const { data: propostasData, error: propostasError } = await supabase
       .from("leads")
@@ -2482,11 +2465,18 @@ export async function getBrokerWeeklyPerformanceMetrics(
 
     console.log(`Propostas enviadas (baseado em etapa): ${propostasEnviadas}`);
 
+    const { data: brokerPoints, error: brokerPointsError } = await supabase
+      .from("broker_points")
+      .select("id, vendas_realizadas, leads_perdidos")
+      .eq("id", brokerId)
+      .eq("company_id", companyId)
+      .single();
+
     return {
       leads_captados: leadsCapturados,
       propostas_enviadas: propostasEnviadas,
-      oportunidades_perdidas: oportunidadesPerdidas,
-      vendas_fechadas: vendasFechadas,
+      oportunidades_perdidas: brokerPoints?.leads_perdidos,
+      vendas_fechadas: brokerPoints?.vendas_realizadas,
     };
   } catch (error) {
     console.error("Erro ao buscar métricas de performance:", error);
