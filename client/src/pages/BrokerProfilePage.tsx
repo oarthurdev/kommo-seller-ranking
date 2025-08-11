@@ -540,13 +540,13 @@ export function BrokerProfilePage() {
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-400">
-                        Oportunidades
+                        Oportunidades perdidas
                       </h3>
-                      <p className="text-sm text-gray-500">perdidas</p>
+                      <p className="text-sm text-gray-500">por inatividade</p>
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.oportunidades_perdidas || 0}
+                    {brokerPoints?.leads_perdidos || 0}
                   </p>
                 </Card>
 
