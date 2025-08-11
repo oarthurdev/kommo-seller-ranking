@@ -126,6 +126,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = (req as any).companyId;
       const { month, year } = req.query;
 
+      if (!companyId) {
+        return res.status(400).json({ error: "Company ID não encontrado" });
+      }
+
       console.log(
         `Buscando pontos de todos os corretores para empresa ${companyId}, mês: ${month}, ano: ${year}`,
       );
@@ -153,6 +157,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
       const { filterType, startDate, endDate, allPipelines } = req.query;
+
+      if (isNaN(brokerId) || !brokerId) {
+        return res.status(400).json({ error: "ID do corretor inválido" });
+      }
+
+      if (!companyId) {
+        return res.status(400).json({ error: "Company ID não encontrado" });
+      }
 
       const { startFormatted, endFormatted } = getDateRange(
         filterType as string,

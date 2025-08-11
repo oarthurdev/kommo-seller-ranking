@@ -425,12 +425,17 @@ export async function getBrokerTotalLeadsLastMonth(
 }
 
 export async function getBrokerPoints(
-  brokerId: number,
+  brokerId: number | null,
   companyId: string,
   startDate?: string,
   endDate?: string,
   allPipelines: boolean = false,
 ) {
+  // If brokerId is null, return all brokers with points (same as getBrokerRankings)
+  if (brokerId === null) {
+    return getBrokerRankings(companyId);
+  }
+
   let query = supabase
     .from("broker_points")
     .select("*")
