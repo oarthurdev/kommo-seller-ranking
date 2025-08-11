@@ -89,7 +89,7 @@ export async function getBrokerRankings(
 
     // Determinar período para contagem de leads
     let targetMonth, targetYear;
-    
+
     // Se mês e ano foram fornecidos diretamente, usar eles
     if (month && year) {
       targetMonth = month;
@@ -144,16 +144,6 @@ export async function getBrokerRankings(
           `Broker ${item.nome} (${item.id}): ${totalLeads} leads entraram em ${targetMonth}/${targetYear}`,
         );
 
-        // Para vendas e leads perdidos, contar apenas os que têm status atual
-        // mas que entraram no mês selecionado
-        const vendasRealizadas = leads.filter(
-          (lead) => lead.status_id === 142,
-        ).length;
-
-        const leadsPerdidos = leads.filter(
-          (lead) => lead.status_id === 143,
-        ).length;
-
         // Calcular propostas baseado nas atividades do mês
         const propostasEnviadas = await getPropostasEnviadasNoMes(
           item.id,
@@ -166,7 +156,7 @@ export async function getBrokerRankings(
         // Get current points from broker_points table - SEMPRE do mês atual para pontos
         const { data: pointsData } = await supabase
           .from("broker_points")
-          .select("pontos")
+          .select("pontos, vendas_realizadas, leads_perdidos")
           .eq("broker_id", item.id)
           .eq("company_id", companyId)
           .gte("updated_at", currentMonthStart.toISOString())
@@ -177,7 +167,9 @@ export async function getBrokerRankings(
 
         // Calcular taxa de conversão baseada nos leads que entraram no mês
         const taxaConversao =
-          totalLeads > 0 ? (vendasRealizadas / totalLeads) * 100 : 0;
+          totalLeads > 0
+            ? (pointsData?.vendas_realizadas / totalLeads) * 100
+            : 0;
 
         return {
           id: item.id,
@@ -192,8 +184,8 @@ export async function getBrokerRankings(
           updated_at: item.updated_at,
           pontos: pointsData?.pontos || 0,
           total_leads: totalLeads,
-          vendas_realizadas: vendasRealizadas,
-          leads_perdidos: leadsPerdidos,
+          vendas_realizadas: pointsData?.vendas_realizadas,
+          leads_perdidos: pointsData?.leads_perdidos,
           propostas_enviadas: propostasEnviadas,
           leads_capturados: totalLeads,
           taxa_conversao: taxaConversao,
@@ -205,21 +197,36 @@ export async function getBrokerRankings(
     let rankings = rankingsResults.filter((result) => result !== null);
 
     // Separar corretores por tipo de pontuação
-    const brokersWithPositivePoints = rankings.filter((broker) => broker.pontos > 0);
-    const brokersWithNegativePoints = rankings.filter((broker) => broker.pontos < 0);
-    const brokersWithZeroPoints = rankings.filter((broker) => broker.pontos === 0);
+    const brokersWithPositivePoints = rankings.filter(
+      (broker) => broker.pontos > 0,
+    );
+    const brokersWithNegativePoints = rankings.filter(
+      (broker) => broker.pontos < 0,
+    );
+    const brokersWithZeroPoints = rankings.filter(
+      (broker) => broker.pontos === 0,
+    );
 
     // Ordenar cada grupo
     brokersWithPositivePoints.sort((a, b) => b.pontos - a.pontos); // Positivos: maior para menor
     brokersWithNegativePoints.sort((a, b) => b.pontos - a.pontos); // Negativos: menos negativo para mais negativo
-    brokersWithZeroPoints.sort((a, b) => (b.total_leads || 0) - (a.total_leads || 0)); // Zero: por leads capturados
+    brokersWithZeroPoints.sort(
+      (a, b) => (b.total_leads || 0) - (a.total_leads || 0),
+    ); // Zero: por leads capturados
 
     // Se nenhum corretor tiver pontos (todos têm 0), ordenar apenas por leads capturados
-    if (brokersWithPositivePoints.length === 0 && brokersWithNegativePoints.length === 0) {
+    if (
+      brokersWithPositivePoints.length === 0 &&
+      brokersWithNegativePoints.length === 0
+    ) {
       rankings = brokersWithZeroPoints;
     } else {
       // Combinar: positivos, negativos, depois zeros
-      rankings = [...brokersWithPositivePoints, ...brokersWithNegativePoints, ...brokersWithZeroPoints];
+      rankings = [
+        ...brokersWithPositivePoints,
+        ...brokersWithNegativePoints,
+        ...brokersWithZeroPoints,
+      ];
     }
 
     return rankings;
@@ -1752,7 +1759,7 @@ export async function getTotalLeads(
         59,
         999,
       );
-      
+
       query = query
         .gte("criado_em", currentMonthStart.toISOString())
         .lte("criado_em", currentMonthEnd.toISOString());
@@ -1777,7 +1784,7 @@ export async function getTotalLeads(
       console.error("Erro ao buscar total de leads:", error);
       return 0;
     }
-    
+
     console.log(`Total leads que entraram no período: ${count || 0}`);
     return count || 0;
   } catch (error) {

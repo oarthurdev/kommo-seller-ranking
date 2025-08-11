@@ -78,35 +78,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Rota para obter pontos de todos os corretores com ordenação
-  app.get("/api/brokers/points", async (req, res) => {
-    try {
-      const companyId = (req as any).companyId;
-      const { month, year } = req.query;
-
-      console.log(
-        `Buscando pontos de todos os corretores para empresa ${companyId}, mês: ${month}, ano: ${year}`,
-      );
-
-      const rankings = await getBrokerPoints(
-        brokerId,
-        companyId,
-        month ? parseInt(month as string) : undefined,
-        year ? parseInt(year as string) : undefined,
-        allPipelines === "true",
-      );
-
-      console.log(`Encontrados ${rankings.length} corretores com pontos`);
-
-      res.json(rankings);
-    } catch (error) {
-      console.error("Erro ao buscar pontos de todos os corretores:", error);
-      res
-        .status(500)
-        .json({ message: "Falha ao buscar pontos dos corretores" });
-    }
-  });
-
   // Rota para obter detalhes de um corretor específico
   app.get("/api/brokers/:id", async (req, res) => {
     try {
@@ -146,6 +117,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Erro ao buscar posição no ranking:", error);
       res.status(500).json({ message: "Falha ao buscar posição no ranking" });
+    }
+  });
+
+  // Rota para obter pontos de todos os corretores com ordenação
+  app.get("/api/brokers/points", async (req, res) => {
+    try {
+      const companyId = (req as any).companyId;
+      const { month, year } = req.query;
+
+      console.log(
+        `Buscando pontos de todos os corretores para empresa ${companyId}, mês: ${month}, ano: ${year}`,
+      );
+
+      // Usar a função getBrokerRankings que já retorna todos os corretores com ordenação
+      const rankings = await getBrokerRankings(
+        companyId,
+        month ? parseInt(month as string) : undefined,
+        year ? parseInt(year as string) : undefined,
+      );
+
+      console.log(`Encontrados ${rankings.length} corretores com pontos`);
+
+      res.json(rankings);
+    } catch (error) {
+      console.error("Erro ao buscar pontos de todos os corretores:", error);
+      res
+        .status(500)
+        .json({ message: "Falha ao buscar pontos dos corretores" });
     }
   });
 
