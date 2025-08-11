@@ -54,23 +54,8 @@ export function BrokerCard({
 }: BrokerCardProps) {
   const iconSize = isTVScreen ? "w-6 h-6" : "w-5 h-5";
 
-  // Fetch all broker points data for sorting and display
-  const { data: allBrokersPoints } = useQuery<Broker[]>({
-    queryKey: ["allBrokersPoints"],
-    queryFn: async () => {
-      const res = await fetch(
-        getServerBaseUrl() + `/api/brokers/points?orderBy=positive_negative_zero_leads`,
-      );
-      if (!res.ok) {
-        throw new Error("Erro ao buscar pontos de todos os corretores");
-      }
-      return await res.json();
-    },
-    enabled: true, // Always enabled to fetch all brokers' points
-  });
-
-  // Find the specific broker's points from the fetched data
-  const currentBrokerPoints = allBrokersPoints?.find(b => b.id === broker.id);
+  // Use broker data directly from props (already fetched in RankingPage)
+  const currentBrokerPoints = broker;
 
   const getRankIcon = (position: number) => {
     switch (position) {
@@ -168,7 +153,7 @@ export function BrokerCard({
               <p
                 className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
               >
-                {broker.total_leads}
+                {currentBrokerPoints?.total_leads ?? broker.total_leads ?? 0}
               </p>
             </div>
 

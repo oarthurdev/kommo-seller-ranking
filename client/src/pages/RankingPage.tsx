@@ -26,14 +26,31 @@ import { TVIndicator } from "@/components/ui/TVIndicator";
 import { getServerBaseUrl } from "@/lib/utils";
 
 // Define the Broker type based on the expected API response
-type Broker = {
+interface Broker {
   id: number;
-  name: string;
-  points: number;
-  leads: number;
-  total_leads?: number; // Optional, as used in BrokerCard
-  // Add other properties if they are returned and used
-};
+  nome: string;
+  pontos: number;
+  leads_capturados: number;
+  propostas_enviadas: number;
+  leads_perdidos: number;
+  vendas_realizadas: number;
+  total_leads: number;
+  leads_respondidos_1h?: number;
+  leads_visitados?: number;
+  leads_atualizados_mesmo_dia?: number;
+  feedbacks_positivos?: number;
+  resposta_rapida_3h?: number;
+  todos_leads_respondidos?: number;
+  cadastro_completo?: number;
+  acompanhamento_pos_venda?: number;
+  leads_sem_interacao_24h?: number;
+  leads_ignorados_48h?: number;
+  leads_respondidos_apos_18h?: number;
+  leads_tempo_resposta_acima_12h?: number;
+  leads_5_dias_sem_mudanca?: number;
+  corretor_ocioso_mais_de_3h?: number;
+  taxa_conversao?: number;
+}
 
 export function RankingPage() {
   const [currentPage, setCurrentPage] = useState(0);
@@ -58,7 +75,7 @@ export function RankingPage() {
     isLoading: isLoadingBrokers,
     refetch: refetchBrokers,
   } = useQuery<Broker[]>({
-    queryKey: ["brokerPoints", currentFilter.month, currentFilter.year],
+    queryKey: ["brokerRankings", currentFilter.month, currentFilter.year],
     queryFn: async () => {
       const params = new URLSearchParams();
 
@@ -67,8 +84,8 @@ export function RankingPage() {
         params.append("year", currentFilter.year.toString());
       }
 
-      const url = `/api/brokers/points${params.toString() ? `?${params.toString()}` : ""}`;
-      console.log("Fetching brokers points from:", url);
+      const url = `/api/brokers/rankings${params.toString() ? `?${params.toString()}` : ""}`;
+      console.log("Fetching brokers rankings from:", url);
 
       const res = await fetch(getServerBaseUrl() + url);
       if (!res.ok) {
@@ -113,7 +130,7 @@ export function RankingPage() {
   useEffect(() => {
     if (brokers && brokers.length >= 3) {
       setTopBrokerIds(
-        brokers.slice(0, 3).map((broker: { id: any }) => broker.id),
+        brokers.slice(0, 3).map((broker: Broker) => broker.id),
       );
     }
   }, [brokers]);
