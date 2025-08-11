@@ -1,8 +1,11 @@
+
 import React from "react";
 import { Link } from "wouter";
+import { useQuery } from "@tanstack/react-query";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Medal, Award, TrendingUp, Users, Target } from "lucide-react";
+import { getServerBaseUrl } from "@/lib/api";
 
 interface Broker {
   id: number;
@@ -30,6 +33,13 @@ interface Broker {
   taxa_conversao?: number;
 }
 
+interface BrokerPoints {
+  pontos: number;
+  vendas_realizadas: number;
+  propostas_enviadas: number;
+  leads_perdidos: number;
+}
+
 interface BrokerCardProps {
   rank: number;
   broker: Broker;
@@ -44,6 +54,21 @@ export function BrokerCard({
   totalLeadsLastMonth = 0,
 }: BrokerCardProps) {
   const iconSize = isTVScreen ? "w-6 h-6" : "w-5 h-5";
+
+  // Fetch broker points data
+  const { data: brokerPoints } = useQuery<BrokerPoints>({
+    queryKey: ["brokerPoints", broker.id],
+    queryFn: async () => {
+      const res = await fetch(
+        getServerBaseUrl() + `/api/brokers/${broker.id}/points`
+      );
+      if (!res.ok) {
+        throw new Error("Erro ao buscar pontos do corretor");
+      }
+      return await res.json();
+    },
+    enabled: !!broker.id,
+  });
 
   const getRankIcon = (position: number) => {
     switch (position) {
@@ -77,6 +102,12 @@ export function BrokerCard({
     }
   };
 
+  // Use broker_points data if available, otherwise fallback to broker data
+  const displayPoints = brokerPoints?.pontos ?? broker.pontos ?? 0;
+  const displayVendas = brokerPoints?.vendas_realizadas ?? broker.vendas_realizadas ?? 0;
+  const displayPropostas = brokerPoints?.propostas_enviadas ?? broker.propostas_enviadas ?? 0;
+  const displayPerdidos = brokerPoints?.leads_perdidos ?? broker.leads_perdidos ?? 0;
+
   return (
     <Link href={`/ranking/broker/${broker.id}`}>
       <Card
@@ -97,14 +128,16 @@ export function BrokerCard({
               variant="secondary"
               className={`
                 ${
-                  broker.pontos < 0
+                  displayPoints < 0
                     ? "bg-red-500/20 text-red-300 border-red-500/30"
+                    : displayPoints === 0
+                    ? "bg-gray-500/20 text-gray-300 border-gray-500/30"
                     : "bg-blue-500/20 text-blue-300 border-blue-500/30"
                 }
                 mt-2 ${isTVScreen ? "text-sm" : "text-xs"}
               `}
             >
-              {broker.pontos} pts
+              {displayPoints} pts
             </Badge>
           </div>
         </div>
@@ -152,7 +185,7 @@ export function BrokerCard({
               <p
                 className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
               >
-                {broker.propostas_enviadas || 0}
+                {displayPropostas}
               </p>
             </div>
           </div>
@@ -176,7 +209,7 @@ export function BrokerCard({
               <p
                 className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
               >
-                {broker.leads_perdidos || 0}
+                {displayPerdidos}
               </p>
             </div>
 
@@ -198,7 +231,7 @@ export function BrokerCard({
               <p
                 className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
               >
-                {broker.vendas_realizadas || 0}
+                {displayVendas}
               </p>
             </div>
           </div>
