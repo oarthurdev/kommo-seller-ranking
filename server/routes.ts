@@ -57,7 +57,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = (req as any).companyId;
       const { month, year } = req.query;
 
-      console.log(`Buscando rankings para empresa ${companyId}, mês: ${month}, ano: ${year}`);
+      console.log(
+        `Buscando rankings para empresa ${companyId}, mês: ${month}, ano: ${year}`,
+      );
 
       const rankings = await getBrokerRankings(
         companyId,
@@ -82,13 +84,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const companyId = (req as any).companyId;
       const { month, year } = req.query;
 
-      console.log(`Buscando pontos de todos os corretores para empresa ${companyId}, mês: ${month}, ano: ${year}`);
+      console.log(
+        `Buscando pontos de todos os corretores para empresa ${companyId}, mês: ${month}, ano: ${year}`,
+      );
 
-      // Usar a mesma lógica de getBrokerRankings mas focar apenas nos pontos e ordenação
-      const rankings = await getBrokerRankings(
+      const rankings = await getBrokerPoints(
+        brokerId,
         companyId,
         month ? parseInt(month as string) : undefined,
         year ? parseInt(year as string) : undefined,
+        allPipelines === "true",
       );
 
       console.log(`Encontrados ${rankings.length} corretores com pontos`);
@@ -800,13 +805,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (month && year) {
         const targetMonth = parseInt(month as string);
         const targetYear = parseInt(year as string);
-        
+
         const periodStart = new Date(targetYear, targetMonth - 1, 1);
         const periodEnd = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
-        
+
         startDate = periodStart.toISOString();
         endDate = periodEnd.toISOString();
-        
+
         console.log(`Dashboard metrics para ${targetMonth}/${targetYear}`);
       } else {
         // Usar filtro de período normal
@@ -815,7 +820,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           start_date as string,
           end_date as string,
         );
-        
+
         startDate = start.toISOString();
         endDate = end.toISOString();
       }
@@ -829,7 +834,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           getTotalSales(companyId, undefined, startDate, endDate),
         ]);
 
-      console.log(`Métricas do dashboard - Total leads: ${totalLeads}, Corretores ativos: ${activeBrokers}, Max pontos: ${maxPoints}, Total vendas: ${totalSales}`);
+      console.log(
+        `Métricas do dashboard - Total leads: ${totalLeads}, Corretores ativos: ${activeBrokers}, Max pontos: ${maxPoints}, Total vendas: ${totalSales}`,
+      );
 
       res.json({
         totalLeads,
