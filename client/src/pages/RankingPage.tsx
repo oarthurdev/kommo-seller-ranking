@@ -25,6 +25,16 @@ import { TVSimulator } from "@/components/ui/TVSimulator";
 import { TVIndicator } from "@/components/ui/TVIndicator";
 import { getServerBaseUrl } from "@/lib/utils";
 
+// Define the Broker type based on the expected API response
+type Broker = {
+  id: number;
+  name: string;
+  points: number;
+  leads: number;
+  total_leads?: number; // Optional, as used in BrokerCard
+  // Add other properties if they are returned and used
+};
+
 export function RankingPage() {
   const [currentPage, setCurrentPage] = useState(0);
   const [topBrokerIds, setTopBrokerIds] = useState<number[]>([]);
@@ -47,30 +57,25 @@ export function RankingPage() {
     data: brokers,
     isLoading: isLoadingBrokers,
     refetch: refetchBrokers,
-  } = useQuery({
-    queryKey: ["brokerRankings", currentFilter],
-    queryFn: () => {
-      // Convert month filter to date range
-      const startDate = new Date(
-        currentFilter.year,
-        currentFilter.month - 1,
-        1,
-      );
-      const endDate = new Date(
-        currentFilter.year,
-        currentFilter.month,
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
+  } = useQuery<Broker[]>({
+    queryKey: ["brokerPoints", currentFilter.month, currentFilter.year],
+    queryFn: async () => {
+      const params = new URLSearchParams();
 
-      return getBrokerRankings({
-        filter_type: "month",
-        month: startDate.getMonth() + 1,
-        year: startDate.getFullYear(),
-      });
+      if (currentFilter.month && currentFilter.year) {
+        params.append("month", currentFilter.month.toString());
+        params.append("year", currentFilter.year.toString());
+      }
+
+      const url = `/api/brokers/points${params.toString() ? `?${params.toString()}` : ""}`;
+      console.log("Fetching brokers points from:", url);
+
+      const res = await fetch(getServerBaseUrl() + url);
+      if (!res.ok) {
+        throw new Error("Erro ao buscar corretores");
+      }
+
+      return await res.json();
     },
   });
 

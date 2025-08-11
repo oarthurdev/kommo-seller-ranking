@@ -76,6 +76,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Rota para obter pontos de todos os corretores com ordenação
+  app.get("/api/brokers/points", async (req, res) => {
+    try {
+      const companyId = (req as any).companyId;
+      const { month, year } = req.query;
+
+      console.log(`Buscando pontos de todos os corretores para empresa ${companyId}, mês: ${month}, ano: ${year}`);
+
+      // Usar a mesma lógica de getBrokerRankings mas focar apenas nos pontos e ordenação
+      const rankings = await getBrokerRankings(
+        companyId,
+        month ? parseInt(month as string) : undefined,
+        year ? parseInt(year as string) : undefined,
+      );
+
+      console.log(`Encontrados ${rankings.length} corretores com pontos`);
+
+      res.json(rankings);
+    } catch (error) {
+      console.error("Erro ao buscar pontos de todos os corretores:", error);
+      res
+        .status(500)
+        .json({ message: "Falha ao buscar pontos dos corretores" });
+    }
+  });
+
   // Rota para obter detalhes de um corretor específico
   app.get("/api/brokers/:id", async (req, res) => {
     try {

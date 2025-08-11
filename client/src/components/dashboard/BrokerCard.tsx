@@ -54,20 +54,23 @@ export function BrokerCard({
 }: BrokerCardProps) {
   const iconSize = isTVScreen ? "w-6 h-6" : "w-5 h-5";
 
-  // Fetch broker points data
-  const { data: brokerPoints } = useQuery<BrokerPoints>({
-    queryKey: ["brokerPoints", broker.id],
+  // Fetch all broker points data for sorting and display
+  const { data: allBrokersPoints } = useQuery<Broker[]>({
+    queryKey: ["allBrokersPoints"],
     queryFn: async () => {
       const res = await fetch(
-        getServerBaseUrl() + `/api/brokers/${broker.id}/points`,
+        getServerBaseUrl() + `/api/brokers/points?orderBy=positive_negative_zero_leads`,
       );
       if (!res.ok) {
-        throw new Error("Erro ao buscar pontos do corretor");
+        throw new Error("Erro ao buscar pontos de todos os corretores");
       }
       return await res.json();
     },
-    enabled: !!broker.id,
+    enabled: true, // Always enabled to fetch all brokers' points
   });
+
+  // Find the specific broker's points from the fetched data
+  const currentBrokerPoints = allBrokersPoints?.find(b => b.id === broker.id);
 
   const getRankIcon = (position: number) => {
     switch (position) {
@@ -101,14 +104,14 @@ export function BrokerCard({
     }
   };
 
-  // Use broker_points data if available, otherwise fallback to broker data
-  const displayPoints = brokerPoints?.pontos ?? broker.pontos ?? 0;
+  // Use currentBrokerPoints data if available, otherwise fallback to broker data
+  const displayPoints = currentBrokerPoints?.pontos ?? broker.pontos ?? 0;
   const displayVendas =
-    brokerPoints?.vendas_realizadas ?? broker.vendas_realizadas ?? 0;
+    currentBrokerPoints?.vendas_realizadas ?? broker.vendas_realizadas ?? 0;
   const displayPropostas =
-    brokerPoints?.propostas_enviadas ?? broker.propostas_enviadas ?? 0;
+    currentBrokerPoints?.propostas_enviadas ?? broker.propostas_enviadas ?? 0;
   const displayPerdidos =
-    brokerPoints?.leads_perdidos ?? broker.leads_perdidos ?? 0;
+    currentBrokerPoints?.leads_perdidos ?? broker.leads_perdidos ?? 0;
 
   return (
     <Link href={`/ranking/broker/${broker.id}`}>
