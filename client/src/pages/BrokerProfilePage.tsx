@@ -100,18 +100,10 @@ export function BrokerProfilePage() {
   }, [broker, error, navigate]);
 
   const { data: brokerPoints } = useQuery<BrokerPoints>({
-    queryKey: ["brokerPoints", brokerId, metricsFilter],
+    queryKey: ["brokerPoints", brokerId, "ranking_metrics"],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (metricsFilter.filter_type) {
-        params.append("filterType", metricsFilter.filter_type);
-      }
-      if (metricsFilter.start_date) {
-        params.append("startDate", metricsFilter.start_date);
-      }
-      if (metricsFilter.end_date) {
-        params.append("endDate", metricsFilter.end_date);
-      }
+      params.append("filterType", "ranking_metrics");
       // Add parameter to include all pipelines
       params.append("allPipelines", "true");
 
@@ -141,18 +133,10 @@ export function BrokerProfilePage() {
     vendas_fechadas: number;
     vgv_mes: number;
   }>({
-    queryKey: ["brokerLeadsWithTicket", brokerId, metricsFilter],
+    queryKey: ["brokerLeadsWithTicket", brokerId, "ranking_metrics"],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (metricsFilter.filter_type) {
-        params.append("filterType", metricsFilter.filter_type);
-      }
-      if (metricsFilter.start_date) {
-        params.append("startDate", metricsFilter.start_date);
-      }
-      if (metricsFilter.end_date) {
-        params.append("endDate", metricsFilter.end_date);
-      }
+      params.append("filterType", "ranking_metrics");
       // Add parameter to include all pipelines
       params.append("allPipelines", "true");
 
@@ -276,18 +260,10 @@ export function BrokerProfilePage() {
 
   const { data: weeklyPerformance, isLoading: isLoadingWeeklyPerformance } =
     useQuery({
-      queryKey: ["brokerWeeklyPerformance", brokerId, metricsFilter],
+      queryKey: ["brokerWeeklyPerformance", brokerId, "ranking_metrics"],
       queryFn: async () => {
         const params = new URLSearchParams();
-        if (metricsFilter.filter_type) {
-          params.append("filterType", metricsFilter.filter_type);
-        }
-        if (metricsFilter.start_date) {
-          params.append("startDate", metricsFilter.start_date);
-        }
-        if (metricsFilter.end_date) {
-          params.append("endDate", metricsFilter.end_date);
-        }
+        params.append("filterType", "ranking_metrics");
 
         const res = await fetch(
           getServerBaseUrl() +
@@ -458,23 +434,6 @@ export function BrokerProfilePage() {
                     Métricas de Performance
                   </h2>
                 </div>
-                <PeriodFilter
-                  componentName="broker_performance_metrics"
-                  onFilterChange={(filter) => {
-                    setMetricsFilter(filter);
-                    // Invalidate related queries immediately
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerPoints", brokerId],
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerLeadsWithTicket", brokerId],
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerWeeklyPerformance", brokerId],
-                    });
-                  }}
-                  compact={true}
-                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
