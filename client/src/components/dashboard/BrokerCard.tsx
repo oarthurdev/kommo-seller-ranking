@@ -183,7 +183,7 @@ export function BrokerCard({
             </div>
           </div>
 
-          <div className={`grid grid-cols-3 ${isTVScreen ? "gap-2" : "gap-1"}`}>
+          <div className={`grid grid-cols-2 ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}>
             <div
               className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
             >
@@ -213,28 +213,6 @@ export function BrokerCard({
                 className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
               >
                 <div
-                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} rounded-full bg-yellow-400`}
-                />
-                <span
-                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
-                >
-                  Descartados
-                </span>
-              </div>
-              <p
-                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
-              >
-                {displayDescartados}
-              </p>
-            </div>
-
-            <div
-              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
-            >
-              <div
-                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
-              >
-                <div
                   className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} rounded-full bg-orange-400`}
                 />
                 <span
@@ -247,6 +225,30 @@ export function BrokerCard({
                 className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
               >
                 {displayVendas}
+              </p>
+            </div>
+          </div>
+
+          <div className={`grid grid-cols-1 ${isTVScreen ? "gap-2" : "gap-1"}`}>
+            <div
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
+            >
+              <div
+                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
+              >
+                <Users
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} text-yellow-400`}
+                />
+                <span
+                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
+                >
+                  Descartados
+                </span>
+              </div>
+              <p
+                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
+              >
+                {displayDescartados}
               </p>
             </div>
           </div>
