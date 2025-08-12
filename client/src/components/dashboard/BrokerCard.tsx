@@ -212,8 +212,8 @@ export function BrokerCard({
               <div
                 className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
               >
-                <Users
-                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} text-yellow-400`}
+                <div
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} rounded-full bg-yellow-400`}
                 />
                 <span
                   className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
