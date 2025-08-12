@@ -136,117 +136,117 @@ export function BrokerCard({
         </div>
 
         {/* Metrics Grid */}
-        <div className={`flex-2`}>
-          <div className={`grid grid-cols-2 ${isTVScreen ? "gap-4" : "gap-2"}`}>
+        <div className="flex-1 min-h-0">
+          <div className={`grid grid-cols-2 ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}>
             <div
-              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
             >
               <div
-                className={`flex items-center ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}
+                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
               >
                 <Target
-                  className={`${isTVScreen ? "w-4 h-4" : "w-3 h-3"} text-blue-400`}
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} text-blue-400`}
                 />
                 <span
-                  className={`text-gray-400 ${isTVScreen ? "text-sm" : "text-xs"}`}
+                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
                 >
                   Leads
                 </span>
               </div>
               <p
-                className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
+                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
               >
                 {currentBrokerPoints?.total_leads ?? broker.total_leads ?? 0}
               </p>
             </div>
 
             <div
-              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
             >
               <div
-                className={`flex items-center ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}
+                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
               >
                 <TrendingUp
-                  className={`${isTVScreen ? "w-4 h-4" : "w-3 h-3"} text-green-400`}
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} text-green-400`}
                 />
                 <span
-                  className={`text-gray-400 ${isTVScreen ? "text-sm" : "text-xs"}`}
+                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
                 >
                   Propostas
                 </span>
               </div>
               <p
-                className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
+                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
               >
                 {displayPropostas}
               </p>
             </div>
           </div>
 
-          <div className={`grid grid-cols-2 ${isTVScreen ? "gap-4" : "gap-2"}`}>
+          <div className={`grid grid-cols-3 ${isTVScreen ? "gap-2" : "gap-1"}`}>
             <div
-              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
             >
               <div
-                className={`flex items-center ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}
+                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
               >
                 <Users
-                  className={`${isTVScreen ? "w-4 h-4" : "w-3 h-3"} text-red-400`}
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} text-red-400`}
                 />
                 <span
-                  className={`text-gray-400 ${isTVScreen ? "text-sm" : "text-xs"}`}
+                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
                 >
                   Perdidos
                 </span>
               </div>
               <p
-                className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
+                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
               >
                 {displayPerdidos}
               </p>
             </div>
 
             <div
-              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
             >
               <div
-                className={`flex items-center ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}
-              >
-                <div
-                  className={`${isTVScreen ? "w-4 h-4" : "w-3 h-3"} rounded-full bg-orange-400`}
-                />
-                <span
-                  className={`text-gray-400 ${isTVScreen ? "text-sm" : "text-xs"}`}
-                >
-                  Vendas
-                </span>
-              </div>
-              <p
-                className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
-              >
-                {displayVendas}
-              </p>
-            </div>
-
-            <div
-              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
-            >
-              <div
-                className={`flex items-center ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}
+                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
               >
                 <Users
-                  className={`${isTVScreen ? "w-4 h-4" : "w-3 h-3"} text-red-400`}
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} text-yellow-400`}
                 />
                 <span
-                  className={`text-gray-400 ${isTVScreen ? "text-sm" : "text-xs"}`}
+                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
                 >
                   Descartados
                 </span>
               </div>
               <p
-                className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
+                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
               >
                 {displayDescartados}
+              </p>
+            </div>
+
+            <div
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-2" : "p-1.5"}`}
+            >
+              <div
+                className={`flex items-center ${isTVScreen ? "gap-1 mb-1" : "gap-1 mb-1"}`}
+              >
+                <div
+                  className={`${isTVScreen ? "w-3 h-3" : "w-3 h-3"} rounded-full bg-orange-400`}
+                />
+                <span
+                  className={`text-gray-400 ${isTVScreen ? "text-xs" : "text-xs"}`}
+                >
+                  Vendas
+                </span>
+              </div>
+              <p
+                className={`font-bold text-white ${isTVScreen ? "text-sm" : "text-xs"}`}
+              >
+                {displayVendas}
               </p>
             </div>
           </div>
