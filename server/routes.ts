@@ -707,100 +707,125 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.post("/api/component-filters/:componentName", async (req, res) => {
-    try {
-      const { componentName } = req.params;
-      const companyId = (req as any).companyId;
-      const filterData = req.body;
-
-      if (!companyId) {
-        return res.status(400).json({ error: "Company ID is required" });
-      }
-
-      // Handle both month filter and period filter
-      let upsertData: any = {
-        company_id: companyId,
-        component_name: componentName,
-        updated_at: new Date().toISOString(),
-      };
-
-      if (filterData.month && filterData.year) {
-        // Month filter format
-        upsertData.filter_type = "month";
-        upsertData.month = filterData.month;
-        upsertData.year = filterData.year;
-        upsertData.start_date = null;
-        upsertData.end_date = null;
-      } else {
-        // Period filter format
-        upsertData.filter_type = filterData.filter_type;
-        upsertData.start_date = filterData.start_date || null;
-        upsertData.end_date = filterData.end_date || null;
-        upsertData.month = null;
-        upsertData.year = null;
-      }
-
-      const { error } = await supabase
-        .from("component_filters")
-        .upsert(upsertData, {
-          onConflict: "company_id,component_name",
-        });
-
-      if (error) throw error;
-
-      res.json({ success: true });
-    } catch (error) {
-      console.error("Error saving component filter:", error);
-      res.status(500).json({ error: "Internal server error" });
-    }
-  });
-
-  app.put("/api/component-filters/:id", async (req, res) => {
-    try {
-      const companyId = (req as any).companyId;
-      const filterId = parseInt(req.params.id);
-      const filterData = req.body;
-      const filter = await updateComponentFilter(
-        companyId,
-        filterId,
-        filterData,
-      );
-      res.json(filter);
-    } catch (error) {
-      console.error("Erro ao atualizar filtro:", error);
-      res.status(500).json({ message: "Erro ao atualizar filtro" });
-    }
-  });
-
-  app.get("/api/component-filters/:componentName", async (req, res) => {
+  // Component filters endpoints
+  app.get('/api/component-filters/:componentName', async (req, res) => {
     try {
       const { componentName } = req.params;
       const companyId = (req as any).companyId;
 
       if (!companyId) {
-        return res.status(400).json({ error: "Company ID is required" });
+        return res.status(400).json({ error: 'Company ID required' });
       }
 
-      const { data, error } = await supabase
-        .from("component_filters")
-        .select("*")
-        .eq("company_id", companyId)
-        .eq("component_name", componentName)
+      const { data: filter, error } = await supabase
+        .from('component_filters')
+        .select('*')
+        .eq('company_id', companyId)
+        .eq('component_name', componentName)
         .single();
 
-      if (error && error.code !== "PGRST116") {
+      if (error && error.code !== 'PGRST116') {
         throw error;
       }
 
-      // Return the filter data in the appropriate format
-      if (data && data.filter_type === "month" && data.month && data.year) {
-        res.json({ month: data.month, year: data.year });
+      res.json(filter);
+    } catch (error) {
+      console.error('Error fetching component filter:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/component-filters', async (req, res) => {
+    try {
+      const { component_name, filter_type, start_date, end_date, month, year } = req.body;
+      const companyId = (req as any).companyId;
+
+      if (!companyId) {
+        return res.status(400).json({ error: 'Company ID required' });
+      }
+
+      // Check if filter already exists
+      const { data: existingFilter } = await supabase
+        .from('component_filters')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('component_name', component_name)
+        .single();
+
+      if (existingFilter) {
+        // Update existing filter
+        const { data, error } = await supabase
+          .from('component_filters')
+          .update({
+            filter_type,
+            start_date: start_date || null,
+            end_date: end_date || null,
+            month: month || null,
+            year: year || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingFilter.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.json(data);
       } else {
-        res.json(data || null);
+        // Create new filter
+        const { data, error } = await supabase
+          .from('component_filters')
+          .insert({
+            company_id: companyId,
+            component_name,
+            filter_type,
+            start_date: start_date || null,
+            end_date: end_date || null,
+            month: month || null,
+            year: year || null
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.json(data);
       }
     } catch (error) {
-      console.error("Error fetching component filter:", error);
-      res.status(500).json({ error: "Internal server error" });
+      console.error('Error saving component filter:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.put('/api/component-filters/:id', async (req, res) => {
+    try {
+      const { id } = req.params;
+      const { component_name, filter_type, start_date, end_date, month, year } = req.body;
+      const companyId = (req as any).companyId;
+
+      if (!companyId) {
+        return res.status(400).json({ error: 'Company ID required' });
+      }
+
+      const { data, error } = await supabase
+        .from('component_filters')
+        .update({
+          component_name,
+          filter_type,
+          start_date: start_date || null,
+          end_date: end_date || null,
+          month: month || null,
+          year: year || null,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .eq('company_id', companyId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      res.json(data);
+    } catch (error) {
+      console.error('Error updating component filter:', error);
+      res.status(500).json({ error: 'Internal server error' });
     }
   });
 

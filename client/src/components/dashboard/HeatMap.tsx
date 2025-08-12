@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Info, Activity } from "lucide-react";
 import { PeriodFilter, PeriodFilterData } from "@/components/ui/PeriodFilter";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 
 interface HeatMapProps {
   dados: {

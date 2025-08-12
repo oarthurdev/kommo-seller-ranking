@@ -34,10 +34,13 @@ const COMPONENT_OPTIONS = [
 ];
 
 const FILTER_TYPE_OPTIONS = [
+  { value: "7_days", label: "Últimos 7 dias" },
+  { value: "30_days", label: "Últimos 30 dias" },
   { value: "current_week", label: "Semana Atual" },
   { value: "current_month", label: "Mês Atual" },
   { value: "last_month", label: "Mês Passado" },
   { value: "custom_range", label: "Período Personalizado" },
+  { value: "month_year", label: "Filtro por Mês/Ano (Global)" },
 ];
 
 export function FilterConfigPage() {

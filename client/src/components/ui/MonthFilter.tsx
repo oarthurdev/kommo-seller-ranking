@@ -1,7 +1,6 @@
-
 import React, { useState, useEffect } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
-import { getServerBaseUrl } from "@/lib/utils";
+import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 
 interface MonthFilterProps {
   componentName: string;
@@ -36,61 +35,41 @@ export function MonthFilter({
   compact = false,
   className = ""
 }: MonthFilterProps) {
-  const currentDate = new Date();
-  const [selectedMonth, setSelectedMonth] = useState(currentDate.getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(currentDate.getFullYear());
+  const { currentFilter, setGlobalFilter, updateComponentFilter } = useUnifiedFilter();
+  const [selectedMonth, setSelectedMonth] = useState(currentFilter.month || new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(currentFilter.year || new Date().getFullYear());
 
   // Generate years (current year + 2 previous years)
+  const currentDate = new Date();
   const years = [];
   for (let i = 2; i >= 0; i--) {
     years.push(currentDate.getFullYear() - i);
   }
 
-  // Load initial filter from backend
+  // Sync with global filter
   useEffect(() => {
-    const loadInitialFilter = async () => {
-      try {
-        const response = await fetch(
-          getServerBaseUrl() + `/api/component-filters/${componentName}`,
-        );
-        if (response.ok) {
-          const filter = await response.json();
-          if (filter && filter.month && filter.year) {
-            setSelectedMonth(filter.month);
-            setSelectedYear(filter.year);
-            onFilterChange({ month: filter.month, year: filter.year });
-          }
-        }
-      } catch (error) {
-        console.error("Erro ao carregar filtro inicial:", error);
-      }
-    };
-
-    loadInitialFilter();
-  }, [componentName, onFilterChange]);
+    if (currentFilter.month && currentFilter.year) {
+      setSelectedMonth(currentFilter.month);
+      setSelectedYear(currentFilter.year);
+      onFilterChange({ month: currentFilter.month, year: currentFilter.year });
+    }
+  }, [currentFilter.month, currentFilter.year]);
 
   const handleFilterChange = async (month: number, year: number) => {
     setSelectedMonth(month);
     setSelectedYear(year);
 
-    const filterData = { month, year };
+    const filterData = { 
+      filter_type: "month_year",
+      month, 
+      year 
+    };
 
-    try {
-      // Save filter to backend
-      await fetch(getServerBaseUrl() + `/api/component-filters/${componentName}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(filterData),
-      });
+    // Update global filter (this will propagate to all components)
+    await setGlobalFilter(filterData);
 
-      onFilterChange(filterData);
-    } catch (error) {
-      console.error("Erro ao salvar filtro:", error);
-      // Still call onFilterChange even if saving fails
-      onFilterChange(filterData);
-    }
+    // Notify parent component
+    onFilterChange({ month, year });
   };
 
   return (

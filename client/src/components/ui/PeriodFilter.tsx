@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from "react";
 import { Calendar, Clock, Filter } from "lucide-react";
 import {
@@ -11,12 +12,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import { getServerBaseUrl } from "@/lib/utils";
+import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 
 export interface PeriodFilterData {
   filter_type: string;
   start_date?: string;
   end_date?: string;
+  month?: number;
+  year?: number;
 }
 
 interface PeriodFilterProps {
@@ -31,7 +34,9 @@ const FILTER_OPTIONS = [
   { value: "30_days", label: "Últimos 30 dias" },
   { value: "current_week", label: "Semana Atual" },
   { value: "current_month", label: "Mês Atual" },
+  { value: "last_month", label: "Mês Passado" },
   { value: "custom_range", label: "Período Personalizado" },
+  { value: "month_year", label: "Filtro por Mês/Ano (Global)" },
 ];
 
 export function PeriodFilter({
@@ -40,40 +45,51 @@ export function PeriodFilter({
   className = "",
   compact = false,
 }: PeriodFilterProps) {
-  const [filterType, setFilterType] = useState("current_month");
+  const { currentFilter, updateComponentFilter, getComponentFilter } = useUnifiedFilter();
+  const [filterType, setFilterType] = useState("month_year");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Carregar filtro existente
+  // Load existing filter for this component
   useEffect(() => {
     const loadExistingFilter = async () => {
       try {
-        const response = await fetch(
-          getServerBaseUrl() + `/api/component-filters/${componentName}`,
-        );
-        if (response.ok) {
-          const filter = await response.json();
-          if (filter) {
-            const newFilterType = filter.filter_type;
-            const newStartDate = filter.start_date
-              ? filter.start_date.split("T")[0]
-              : "";
-            const newEndDate = filter.end_date
-              ? filter.end_date.split("T")[0]
-              : "";
+        const filter = await getComponentFilter(componentName);
+        if (filter) {
+          const newFilterType = filter.filter_type;
+          const newStartDate = filter.start_date
+            ? filter.start_date.split("T")[0]
+            : "";
+          const newEndDate = filter.end_date
+            ? filter.end_date.split("T")[0]
+            : "";
 
-            setFilterType(newFilterType);
-            setStartDate(newStartDate);
-            setEndDate(newEndDate);
+          setFilterType(newFilterType);
+          setStartDate(newStartDate);
+          setEndDate(newEndDate);
 
-            // Notify parent component immediately with loaded filter
+          // If using global filter, apply current global values
+          if (newFilterType === "month_year") {
+            onFilterChange({
+              filter_type: "month_year",
+              month: currentFilter.month,
+              year: currentFilter.year,
+            });
+          } else {
             onFilterChange({
               filter_type: newFilterType,
               start_date: newStartDate || undefined,
               end_date: newEndDate || undefined,
             });
           }
+        } else {
+          // Default to global filter
+          onFilterChange({
+            filter_type: "month_year",
+            month: currentFilter.month,
+            year: currentFilter.year,
+          });
         }
       } catch (error) {
         console.error("Erro ao carregar filtro:", error);
@@ -81,12 +97,25 @@ export function PeriodFilter({
     };
 
     loadExistingFilter();
-  }, [componentName]);
+  }, [componentName, currentFilter.month, currentFilter.year]);
+
+  // Update when global filter changes
+  useEffect(() => {
+    if (filterType === "month_year") {
+      onFilterChange({
+        filter_type: "month_year",
+        month: currentFilter.month,
+        year: currentFilter.year,
+      });
+    }
+  }, [currentFilter, filterType]);
 
   const handleFilterTypeChange = (value: string) => {
     setFilterType(value);
 
-    if (value !== "custom_range") {
+    if (value === "month_year") {
+      applyFilter(value, "", "", currentFilter.month, currentFilter.year);
+    } else if (value !== "custom_range") {
       applyFilter(value, "", "");
     }
   };
@@ -97,7 +126,13 @@ export function PeriodFilter({
     }
   };
 
-  const applyFilter = async (type: string, start?: string, end?: string) => {
+  const applyFilter = async (
+    type: string, 
+    start?: string, 
+    end?: string,
+    month?: number,
+    year?: number
+  ) => {
     setIsLoading(true);
 
     try {
@@ -105,39 +140,14 @@ export function PeriodFilter({
         filter_type: type,
         start_date: start || undefined,
         end_date: end || undefined,
+        month: month || undefined,
+        year: year || undefined,
       };
 
-      // Salvar no backend
-      const response = await fetch(
-        getServerBaseUrl() + `/api/component-filters/${componentName}`,
-        {
-          method: "GET",
-        },
-      );
+      // Save to backend
+      await updateComponentFilter(componentName, filterData);
 
-      let method = "POST";
-      let url = "/api/component-filters";
-
-      if (response.ok) {
-        const existingFilter = await response.json();
-        if (existingFilter) {
-          method = "PUT";
-          url = `/api/component-filters/${existingFilter.id}`;
-        }
-      }
-
-      await fetch(getServerBaseUrl() + url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          component_name: componentName,
-          ...filterData,
-        }),
-      });
-
-      // Notificar componente pai
+      // Notify parent component
       onFilterChange(filterData);
 
       // Update local state
@@ -153,18 +163,32 @@ export function PeriodFilter({
     }
   };
 
+  const getCurrentFilterLabel = () => {
+    if (filterType === "month_year") {
+      return `${currentFilter.month}/${currentFilter.year}`;
+    }
+    
+    const option = FILTER_OPTIONS.find(opt => opt.value === filterType);
+    return option?.label || filterType;
+  };
+
   if (compact) {
     return (
       <div className={`flex items-center gap-2 ${className}`}>
         <Filter className="w-4 h-4 text-gray-400" />
         <Select value={filterType} onValueChange={handleFilterTypeChange}>
-          <SelectTrigger className="w-48 h-8 bg-gray-800/50 border-gray-600 text-white text-sm">
-            <SelectValue />
+          <SelectTrigger className="w-64 h-8 bg-gray-800/50 border-gray-600 text-white text-sm">
+            <SelectValue>
+              Filtro: {getCurrentFilterLabel()}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.label}
+                {option.value === "month_year" 
+                  ? `${option.label} (${currentFilter.month}/${currentFilter.year})`
+                  : option.label
+                }
               </SelectItem>
             ))}
           </SelectContent>
@@ -210,12 +234,17 @@ export function PeriodFilter({
       <div className="space-y-3">
         <Select value={filterType} onValueChange={handleFilterTypeChange}>
           <SelectTrigger className="bg-gray-700/50 border-gray-600 text-white">
-            <SelectValue />
+            <SelectValue>
+              {getCurrentFilterLabel()}
+            </SelectValue>
           </SelectTrigger>
           <SelectContent>
             {FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.label}
+                {option.value === "month_year" 
+                  ? `${option.label} (${currentFilter.month}/${currentFilter.year})`
+                  : option.label
+                }
               </SelectItem>
             ))}
           </SelectContent>
