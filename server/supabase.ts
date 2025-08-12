@@ -1686,7 +1686,6 @@ export async function getBrokerPerformance(
 // Funções para obter métricas gerais do dashboard
 export async function getTotalLeads(
   companyId: string,
-  pipelineId?: number,
   startDate?: string,
   endDate?: string,
 ) {
@@ -1697,38 +1696,12 @@ export async function getTotalLeads(
       return 0;
     }
 
-    // Buscar configuração dos pipelines da empresa
-    const { data: configData, error: configError } = await supabase
-      .from("kommo_config")
-      .select("pipeline_id")
-      .eq("company_id", companyId)
-      .single();
-
-    if (configError || !configData?.pipeline_id) {
-      console.error("Erro ao buscar pipeline_id da kommo_config:", configError);
-      return 0;
-    }
-
-    const availablePipelineIds = getPipelineIds(configData);
-
-    if (availablePipelineIds.length === 0) {
-      console.error("Nenhum pipeline disponível encontrado");
-      return 0;
-    }
-
     // Buscar apenas leads de corretores ativos com cargo "Corretor"
     let query = supabase
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("company_id", companyId);
-
-    // Filtrar por pipeline específico ou todos os disponíveis
-    if (pipelineId && !isNaN(pipelineId)) {
-      query = query.eq("pipeline_id", pipelineId);
-    } else {
-      query = query.in("pipeline_id", availablePipelineIds);
-    }
-
+    
     // MUDANÇA PRINCIPAL: Sempre usar a data de criação dos leads (criado_em)
     // para contar quantos leads entraram no período, independente do status atual
     if (startDate && endDate) {
@@ -1770,8 +1743,6 @@ export async function getTotalLeads(
       .from("brokers")
       .select("id")
       .eq("company_id", companyId)
-      .eq("active", true)
-      .eq("cargo", "Corretor");
 
     if (activeBrokers && activeBrokers.length > 0) {
       const activeBrokerIds = activeBrokers.map((broker) => broker.id);

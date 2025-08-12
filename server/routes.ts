@@ -808,38 +808,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/dashboard/metrics", async (req, res) => {
     try {
       const companyId = (req as any).companyId;
-      const { filter_type, start_date, end_date, month, year } = req.query;
+      const { month, year } = req.query;
 
       let startDate: string, endDate: string;
 
-      // Se mês e ano foram fornecidos, usar eles diretamente
-      if (month && year) {
-        const targetMonth = parseInt(month as string);
-        const targetYear = parseInt(year as string);
+      const targetMonth = parseInt(month as string);
+      const targetYear = parseInt(year as string);
 
-        const periodStart = new Date(targetYear, targetMonth - 1, 1);
-        const periodEnd = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
+      const periodStart = new Date(targetYear, targetMonth - 1, 1);
+      const periodEnd = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
 
-        startDate = periodStart.toISOString();
-        endDate = periodEnd.toISOString();
+      startDate = periodStart.toISOString();
+      endDate = periodEnd.toISOString();
 
-        console.log(`Dashboard metrics para ${targetMonth}/${targetYear} - Período: ${startDate} até ${endDate}`);
-      } else {
-        // Usar filtro de período normal
-        const { start, end } = getDateRange(
-          filter_type as string,
-          start_date as string,
-          end_date as string,
-        );
-
-        startDate = start.toISOString();
-        endDate = end.toISOString();
-      }
+      console.log(
+        `Dashboard metrics para ${targetMonth}/${targetYear} - Período: ${startDate} até ${endDate}`,
+      );
 
       // Buscar métricas baseadas em leads que ENTRARAM no período selecionado
       const [totalLeads, activeBrokers, maxPoints, totalSales] =
         await Promise.all([
-          getTotalLeads(companyId, undefined, startDate, endDate),
+          getTotalLeads(companyId, startDate, endDate),
           getActiveBrokers(companyId),
           getMaxPoints(companyId, startDate, endDate),
           getTotalSales(companyId, undefined, startDate, endDate),
