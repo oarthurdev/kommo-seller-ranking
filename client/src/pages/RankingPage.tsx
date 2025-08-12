@@ -4,7 +4,6 @@ import { BrokerCard } from "@/components/dashboard/BrokerCard";
 import { MetricSummaryCards } from "@/components/dashboard/MetricSummaryCards";
 import {
   getBrokerRankings,
-  getDashboardMetrics,
   getBrokerLeads,
 } from "@/lib/api";
 import {
@@ -101,29 +100,21 @@ export function RankingPage() {
     isLoading: isLoadingMetrics,
     refetch: refetchMetrics,
   } = useQuery({
-    queryKey: ["dashboardMetrics", currentFilter],
-    queryFn: () => {
-      // Convert month filter to date range
-      const startDate = new Date(
-        currentFilter.year,
-        currentFilter.month - 1,
-        1,
-      );
-      const endDate = new Date(
-        currentFilter.year,
-        currentFilter.month,
-        0,
-        23,
-        59,
-        59,
-        999,
-      );
+    queryKey: ["dashboardMetrics", currentFilter.month, currentFilter.year],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      params.append("month", currentFilter.month.toString());
+      params.append("year", currentFilter.year.toString());
 
-      return getDashboardMetrics({
-        filter_type: "custom_range",
-        start_date: startDate.toISOString().split("T")[0],
-        end_date: endDate.toISOString().split("T")[0],
-      });
+      const url = `/api/dashboard/metrics?${params.toString()}`;
+      console.log("Fetching dashboard metrics from:", url);
+
+      const res = await fetch(getServerBaseUrl() + url);
+      if (!res.ok) {
+        throw new Error("Erro ao buscar métricas do dashboard");
+      }
+
+      return await res.json();
     },
   });
 

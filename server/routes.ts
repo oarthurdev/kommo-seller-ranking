@@ -823,7 +823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startDate = periodStart.toISOString();
         endDate = periodEnd.toISOString();
 
-        console.log(`Dashboard metrics para ${targetMonth}/${targetYear}`);
+        console.log(`Dashboard metrics para ${targetMonth}/${targetYear} - Período: ${startDate} até ${endDate}`);
       } else {
         // Usar filtro de período normal
         const { start, end } = getDateRange(
