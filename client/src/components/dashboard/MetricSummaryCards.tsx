@@ -53,13 +53,6 @@ export function MetricSummaryCards({
       bgColor: "bg-blue-500/10",
     },
     {
-      title: "Corretores Ativos",
-      value: activeBrokers.toString(),
-      icon: Users,
-      color: "text-green-500",
-      bgColor: "bg-green-500/10",
-    },
-    {
       title: "Pontuação Máxima",
       value: averagePoints.toLocaleString(),
       icon: TrendingUp,

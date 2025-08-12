@@ -2,10 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useQueries } from "@tanstack/react-query";
 import { BrokerCard } from "@/components/dashboard/BrokerCard";
 import { MetricSummaryCards } from "@/components/dashboard/MetricSummaryCards";
-import {
-  getBrokerRankings,
-  getBrokerLeads,
-} from "@/lib/api";
+import { getBrokerRankings, getBrokerLeads } from "@/lib/api";
 import {
   Medal,
   TrendingUp,
@@ -120,9 +117,7 @@ export function RankingPage() {
 
   useEffect(() => {
     if (brokers && brokers.length >= 3) {
-      setTopBrokerIds(
-        brokers.slice(0, 3).map((broker: Broker) => broker.id),
-      );
+      setTopBrokerIds(brokers.slice(0, 3).map((broker: Broker) => broker.id));
     }
   }, [brokers]);
 
@@ -182,13 +177,13 @@ export function RankingPage() {
                       <Activity className="w-4 h-4" />
                       <span className="text-sm font-medium">Tempo Real</span>
                     </div>
-                    <a
+                    {/* <a
                       href="/ranking/retrospective"
                       className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-full border border-purple-500/30 hover:bg-purple-500/30 transition-colors"
                     >
                       <Trophy className="w-4 h-4" />
                       <span className="text-sm font-medium">Retrospectiva</span>
-                    </a>
+                    </a> */}
                   </div>
                 </div>
               </div>
