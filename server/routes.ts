@@ -735,6 +735,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  app.post('/api/component-filters/:componentName', async (req, res) => {
+    try {
+      const { componentName } = req.params;
+      const { filter_type, start_date, end_date, month, year } = req.body;
+      const companyId = (req as any).companyId;
+
+      if (!companyId) {
+        return res.status(400).json({ error: 'Company ID required' });
+      }
+
+      // Check if filter already exists
+      const { data: existingFilter } = await supabase
+        .from('component_filters')
+        .select('id')
+        .eq('company_id', companyId)
+        .eq('component_name', componentName)
+        .single();
+
+      if (existingFilter) {
+        // Update existing filter
+        const { data, error } = await supabase
+          .from('component_filters')
+          .update({
+            filter_type,
+            start_date: start_date || null,
+            end_date: end_date || null,
+            month: month || null,
+            year: year || null,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', existingFilter.id)
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.json(data);
+      } else {
+        // Create new filter
+        const { data, error } = await supabase
+          .from('component_filters')
+          .insert({
+            company_id: companyId,
+            component_name: componentName,
+            filter_type,
+            start_date: start_date || null,
+            end_date: end_date || null,
+            month: month || null,
+            year: year || null
+          })
+          .select()
+          .single();
+
+        if (error) throw error;
+        return res.json(data);
+      }
+    } catch (error) {
+      console.error('Error saving component filter:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.post('/api/component-filters', async (req, res) => {
     try {
       const { component_name, filter_type, start_date, end_date, month, year } = req.body;
