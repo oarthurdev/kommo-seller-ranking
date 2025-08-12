@@ -156,7 +156,9 @@ export async function getBrokerRankings(
         // Get current points from broker_points table - SEMPRE do mês atual para pontos
         const { data: pointsData } = await supabase
           .from("broker_points")
-          .select("id, pontos, vendas_realizadas, leads_perdidos")
+          .select(
+            "id, pontos, vendas_realizadas, leads_perdidos, leads_descartados",
+          )
           .eq("id", item.id)
           .eq("company_id", companyId)
           .gte("updated_at", currentMonthStart.toISOString())
@@ -186,6 +188,7 @@ export async function getBrokerRankings(
           total_leads: totalLeads,
           vendas_realizadas: pointsData?.vendas_realizadas,
           leads_perdidos: pointsData?.leads_perdidos,
+          leads_descartados: pointsData?.leads_descartados,
           propostas_enviadas: propostasEnviadas,
           leads_capturados: totalLeads,
           taxa_conversao: taxaConversao,
@@ -1701,7 +1704,7 @@ export async function getTotalLeads(
       .from("leads")
       .select("id", { count: "exact", head: true })
       .eq("company_id", companyId);
-    
+
     // MUDANÇA PRINCIPAL: Sempre usar a data de criação dos leads (criado_em)
     // para contar quantos leads entraram no período, independente do status atual
     if (startDate && endDate) {
@@ -1742,7 +1745,7 @@ export async function getTotalLeads(
     const { data: activeBrokers } = await supabase
       .from("brokers")
       .select("id")
-      .eq("company_id", companyId)
+      .eq("company_id", companyId);
 
     if (activeBrokers && activeBrokers.length > 0) {
       const activeBrokerIds = activeBrokers.map((broker) => broker.id);

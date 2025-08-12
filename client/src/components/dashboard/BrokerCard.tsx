@@ -13,6 +13,7 @@ interface Broker {
   leads_capturados: number;
   propostas_enviadas: number;
   leads_perdidos: number;
+  leads_descartados: number;
   vendas_realizadas: number;
   total_leads: number;
   leads_respondidos_1h?: number;
@@ -97,6 +98,8 @@ export function BrokerCard({
     currentBrokerPoints?.propostas_enviadas ?? broker.propostas_enviadas ?? 0;
   const displayPerdidos =
     currentBrokerPoints?.leads_perdidos ?? broker.leads_perdidos ?? 0;
+  const displayDescartados =
+    currentBrokerPoints?.leads_descartados ?? broker.leads_descartados ?? 0;
 
   return (
     <Link href={`/ranking/broker/${broker.id}`}>
@@ -133,7 +136,7 @@ export function BrokerCard({
         </div>
 
         {/* Metrics Grid */}
-        <div className={`flex-1 ${isTVScreen ? "space-y-4" : "space-y-3"}`}>
+        <div className={`flex-2`}>
           <div className={`grid grid-cols-2 ${isTVScreen ? "gap-4" : "gap-2"}`}>
             <div
               className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
@@ -222,6 +225,28 @@ export function BrokerCard({
                 className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
               >
                 {displayVendas}
+              </p>
+            </div>
+
+            <div
+              className={`bg-gray-900/50 rounded-lg ${isTVScreen ? "p-3" : "p-2"}`}
+            >
+              <div
+                className={`flex items-center ${isTVScreen ? "gap-2 mb-2" : "gap-1 mb-1"}`}
+              >
+                <Users
+                  className={`${isTVScreen ? "w-4 h-4" : "w-3 h-3"} text-red-400`}
+                />
+                <span
+                  className={`text-gray-400 ${isTVScreen ? "text-sm" : "text-xs"}`}
+                >
+                  Descartados
+                </span>
+              </div>
+              <p
+                className={`font-bold text-white ${isTVScreen ? "text-lg" : "text-sm"}`}
+              >
+                {displayDescartados}
               </p>
             </div>
           </div>
