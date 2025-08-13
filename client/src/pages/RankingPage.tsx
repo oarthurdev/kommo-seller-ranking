@@ -302,13 +302,17 @@ export function RankingPage() {
                 </div>
                 <p className="text-gray-300 mb-4">
                   Estamos processando os dados do período selecionado e recalculando a pontuação de todos os corretores. 
-                  Este processo garante que você visualize informações precisas e atualizadas. Aguarde alguns instantes...
+                  Este processo é executado em tempo real e garante que você visualize informações precisas e atualizadas.
                 </p>
-                <div className="w-full bg-gray-700 rounded-full h-2">
+                <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
                   <div 
-                    className="bg-gradient-to-r from-orange-400 to-yellow-400 h-2 rounded-full transition-all duration-300"
+                    className="bg-gradient-to-r from-orange-400 to-yellow-400 h-2 rounded-full transition-all duration-500"
                     style={{ width: `${recalculationProgress}%` }}
                   ></div>
+                </div>
+                <div className="flex justify-between text-sm text-gray-400">
+                  <span>Processando dados...</span>
+                  <span>{Math.round(recalculationProgress)}%</span>
                 </div>
               </div>
             )}
