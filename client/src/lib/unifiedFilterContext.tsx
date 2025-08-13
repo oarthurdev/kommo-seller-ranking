@@ -1,5 +1,10 @@
-
-import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+} from "react";
 import { getServerBaseUrl } from "@/lib/utils";
 
 export interface UnifiedFilterData {
@@ -13,15 +18,28 @@ export interface UnifiedFilterData {
 interface UnifiedFilterContextType {
   currentFilter: UnifiedFilterData;
   setGlobalFilter: (filter: UnifiedFilterData) => void;
-  updateComponentFilter: (componentName: string, filter: UnifiedFilterData) => Promise<void>;
-  getComponentFilter: (componentName: string) => Promise<UnifiedFilterData | null>;
+  updateComponentFilter: (
+    componentName: string,
+    filter: UnifiedFilterData,
+  ) => Promise<void>;
+  getComponentFilter: (
+    componentName: string,
+  ) => Promise<UnifiedFilterData | null>;
   getGlobalFilter: () => UnifiedFilterData;
-  propagateGlobalFilterToComponents: () => Promise<void>;
+  propagateGlobalFilterToComponents: (
+    baseFilter?: UnifiedFilterData,
+  ) => Promise<void>;
 }
 
-const UnifiedFilterContext = createContext<UnifiedFilterContextType | null>(null);
+const UnifiedFilterContext = createContext<UnifiedFilterContextType | null>(
+  null,
+);
 
-export function UnifiedFilterProvider({ children }: { children: React.ReactNode }) {
+export function UnifiedFilterProvider({
+  children,
+}: {
+  children: React.ReactNode;
+}) {
   const currentDate = new Date();
   const [currentFilter, setCurrentFilter] = useState<UnifiedFilterData>({
     filter_type: "month",
@@ -39,17 +57,18 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
         if (response.ok) {
           const filter = await response.json();
           if (filter && (filter.month || filter.filter_type)) {
-            const globalFilter = filter.filter_type === "month" && filter.month && filter.year
-              ? {
-                  filter_type: "month",
-                  month: filter.month,
-                  year: filter.year,
-                }
-              : {
-                  filter_type: filter.filter_type || "current_month",
-                  start_date: filter.start_date,
-                  end_date: filter.end_date,
-                };
+            const globalFilter: UnifiedFilterData =
+              filter.filter_type === "month" && filter.month && filter.year
+                ? {
+                    filter_type: "month",
+                    month: filter.month,
+                    year: filter.year,
+                  }
+                : {
+                    filter_type: filter.filter_type || "current_month",
+                    start_date: filter.start_date,
+                    end_date: filter.end_date,
+                  };
             setCurrentFilter(globalFilter);
           }
         }
@@ -61,64 +80,111 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
     loadInitialFilter();
   }, []);
 
-  const setGlobalFilter = useCallback(async (filter: UnifiedFilterData) => {
-    setCurrentFilter(filter);
-    
-    // Update ranking_metrics filter (global filter)
-    await updateComponentFilter("ranking_metrics", filter);
-    
-    // Propagate to all broker page components
-    await propagateGlobalFilterToComponents();
-  }, []);
+  /**
+   * Sempre envia month/year do globalFilter (currentFilter),
+   * independentemente do que vier no `filter` passado.
+   */
+  const updateComponentFilter = useCallback(
+    async (componentName: string, filter: UnifiedFilterData) => {
+      try {
+        const monthToSend =
+          typeof filter.month === "number" ? filter.month : currentFilter.month;
+        const yearToSend =
+          typeof filter.year === "number" ? filter.year : currentFilter.year;
 
-  const propagateGlobalFilterToComponents = useCallback(async () => {
-    const brokerComponents = [
-      "broker_performance_metrics", 
-      "broker_heatmap",
-      "sales_funnel",
-      "lost_leads_funnel"
-    ];
-
-    for (const componentName of brokerComponents) {
-      await updateComponentFilter(componentName, currentFilter);
-    }
-  }, [currentFilter]);
-
-  const updateComponentFilter = useCallback(async (componentName: string, filter: UnifiedFilterData) => {
-    try {
-      await fetch(getServerBaseUrl() + `/api/component-filters/${componentName}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          component_name: componentName,
-          ...filter,
-        }),
-      });
-    } catch (error) {
-      console.error(`Erro ao salvar filtro para ${componentName}:`, error);
-    }
-  }, []);
-
-  const getComponentFilter = useCallback(async (componentName: string): Promise<UnifiedFilterData | null> => {
-    try {
-      const response = await fetch(
-        getServerBaseUrl() + `/api/component-filters/${componentName}`,
-      );
-      if (response.ok) {
-        const filter = await response.json();
-        return filter || null;
+        await fetch(
+          getServerBaseUrl() + `/api/component-filters/${componentName}`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              component_name: componentName,
+              ...filter,
+              month: monthToSend,
+              year: yearToSend,
+            }),
+          },
+        );
+      } catch (error) {
+        console.error(`Erro ao salvar filtro para ${componentName}:`, error);
       }
-    } catch (error) {
-      console.error(`Erro ao buscar filtro para ${componentName}:`, error);
-    }
-    return null;
-  }, []);
+    },
+    [currentFilter.month, currentFilter.year],
+  );
 
-  const getGlobalFilter = useCallback(() => {
-    return currentFilter;
-  }, [currentFilter]);
+  /**
+   * Propaga o filtro global para os componentes da página do corretor.
+   * Aceita um filtro base opcional para evitar race entre setState e POST.
+   */
+  const propagateGlobalFilterToComponents = useCallback(
+    async (baseFilter?: UnifiedFilterData) => {
+      const brokerComponents = [
+        "broker_performance_metrics",
+        "broker_heatmap",
+        "sales_funnel",
+        "lost_leads_funnel",
+      ];
+
+      const toPropagate = baseFilter ?? currentFilter;
+
+      for (const componentName of brokerComponents) {
+        await updateComponentFilter(componentName, toPropagate);
+      }
+    },
+    [currentFilter, updateComponentFilter],
+  );
+
+  /**
+   * Troca o filtro global e garante que month/year usados nos POSTs
+   * sejam os do novo globalFilter.
+   */
+  const setGlobalFilter = useCallback(
+    async (filter: UnifiedFilterData) => {
+      // Normaliza o novo global (garante month/year quando for filtro mensal)
+      const nextGlobal: UnifiedFilterData =
+        filter.filter_type === "month"
+          ? {
+              filter_type: "month",
+              month: filter.month ?? currentFilter.month,
+              year: filter.year ?? currentFilter.year,
+            }
+          : { ...filter };
+
+      setCurrentFilter(nextGlobal);
+
+      // Atualiza o filtro "global" do ranking
+      await updateComponentFilter("ranking_metrics", nextGlobal);
+
+      // Propaga já usando o nextGlobal (evita depender do setState assíncrono)
+      await propagateGlobalFilterToComponents(nextGlobal);
+    },
+    [
+      currentFilter.month,
+      currentFilter.year,
+      updateComponentFilter,
+      propagateGlobalFilterToComponents,
+    ],
+  );
+
+  const getComponentFilter = useCallback(
+    async (componentName: string): Promise<UnifiedFilterData | null> => {
+      try {
+        const response = await fetch(
+          getServerBaseUrl() + `/api/component-filters/${componentName}`,
+        );
+        if (response.ok) {
+          const filter = await response.json();
+          return filter || null;
+        }
+      } catch (error) {
+        console.error(`Erro ao buscar filtro para ${componentName}:`, error);
+      }
+      return null;
+    },
+    [],
+  );
+
+  const getGlobalFilter = useCallback(() => currentFilter, [currentFilter]);
 
   return (
     <UnifiedFilterContext.Provider
@@ -139,7 +205,9 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
 export function useUnifiedFilter() {
   const context = useContext(UnifiedFilterContext);
   if (!context) {
-    throw new Error("useUnifiedFilter must be used within UnifiedFilterProvider");
+    throw new Error(
+      "useUnifiedFilter must be used within UnifiedFilterProvider",
+    );
   }
   return context;
 }

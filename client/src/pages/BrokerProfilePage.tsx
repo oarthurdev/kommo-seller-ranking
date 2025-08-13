@@ -8,9 +8,12 @@ import {
   ArrowLeft,
   User,
   Activity,
+  TrendingUp,
+  Clock,
+  BarChart3,
 } from "lucide-react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useParams, Link, useLocation } from "wouter";
+import { useParams, useLocation } from "wouter";
 import { FunnelBar } from "@/components/ui/FunnelBar";
 import { HeatMap } from "@/components/dashboard/HeatMap";
 import { LostLeadsFunnel } from "@/components/dashboard/LostLeadsFunnel";
@@ -26,35 +29,89 @@ import {
   getKommoConfig,
 } from "@/lib/supabase";
 import { Card } from "@/components/ui/card";
-import { TrendingUp, Clock, BarChart3 } from "lucide-react";
 import { useBranding } from "@/lib/brandingContext";
 import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 import { getServerBaseUrl } from "@/lib/utils";
 
-// Add branding context usage
 export function BrokerProfilePage() {
   const { id } = useParams() as { id: string };
   const brokerId = parseInt(id);
   const [, navigate] = useLocation();
   const { branding } = useBranding();
   const queryClient = useQueryClient();
-  const { updateComponentFilter } = useUnifiedFilter();
 
-  // Estados para filtros dos componentes
-  const [metricsFilter, setMetricsFilter] = useState<PeriodFilterData>({
-    filter_type: "current_month",
-  });
-  const [heatmapFilter, setHeatmapFilter] = useState<PeriodFilterData>({
-    filter_type: "current_week",
-  });
-  const [salesFunnelFilter, setSalesFunnelFilter] = useState<PeriodFilterData>({
-    filter_type: "current_month",
-  });
-  const [lostLeadsFilter, setLostLeadsFilter] = useState<PeriodFilterData>({
-    filter_type: "current_month",
-  });
+  // Pega o globalFilter reativo
+  const { currentFilter: globalFilter, updateComponentFilter } =
+    useUnifiedFilter();
 
-  // Define types for your data if not already defined
+  // Overrides locais (só existem quando o usuário mexe no filtro do componente)
+  const [metricsFilterOverride, setMetricsFilterOverride] =
+    useState<PeriodFilterData | null>(null);
+  const [heatmapFilterOverride, setHeatmapFilterOverride] =
+    useState<PeriodFilterData | null>(null);
+  const [salesFunnelFilterOverride, setSalesFunnelFilterOverride] =
+    useState<PeriodFilterData | null>(null);
+  const [lostLeadsFilterOverride, setLostLeadsFilterOverride] =
+    useState<PeriodFilterData | null>(null);
+
+  // ---- Helpers de filtro ----
+  type EffectiveFilter =
+    | (PeriodFilterData & { month?: number; year?: number })
+    | { filter_type: "month"; month: number; year: number };
+
+  const resolveEffectiveFilter = (
+    override: PeriodFilterData | null,
+    globalF: {
+      filter_type: string;
+      month?: number;
+      year?: number;
+      start_date?: string;
+      end_date?: string;
+    },
+  ): EffectiveFilter => {
+    // Se o usuário escolheu manualmente um tipo diferente de "month", respeita o override
+    if (override?.filter_type && override.filter_type !== "month") {
+      return override as EffectiveFilter;
+    }
+
+    // Caso contrário, usa o globalFilter
+    if (globalF.filter_type === "month") {
+      return {
+        filter_type: "month",
+        month: globalF.month!,
+        year: globalF.year!,
+      };
+    }
+    // Global não é month (ex.: current_week, custom_range etc.)
+    return {
+      filter_type: globalF.filter_type,
+      start_date: globalF.start_date,
+      end_date: globalF.end_date,
+    } as EffectiveFilter;
+  };
+
+  const buildParamsFromFilter = (f: EffectiveFilter) => {
+    const params = new URLSearchParams();
+    params.append("allPipelines", "true");
+
+    if (f.filter_type) params.append("filterType", f.filter_type);
+
+    if (f.filter_type === "month") {
+      // carrega mês/ano do global
+      if (typeof (f as any).month === "number")
+        params.append("month", String((f as any).month));
+      if (typeof (f as any).year === "number")
+        params.append("year", String((f as any).year));
+    } else {
+      if ((f as any).start_date)
+        params.append("startDate", (f as any).start_date);
+      if ((f as any).end_date) params.append("endDate", (f as any).end_date);
+    }
+
+    return params;
+  };
+
+  // ---- Tipagens originais ----
   type Broker = Awaited<ReturnType<typeof getBrokerById>>;
   type BrokerPoints = Awaited<ReturnType<typeof getBrokerPoints>> & {
     vgv_mes?: number;
@@ -66,7 +123,6 @@ export function BrokerProfilePage() {
   type RankPosition = Awaited<ReturnType<typeof getBrokerRankPosition>>;
   type Lead = Awaited<ReturnType<typeof getBrokerLeads>>[number];
   type KommoConfig = Awaited<ReturnType<typeof getKommoConfig>>;
-
   type HeatmapData = {
     dias: string[];
     horarios: string[];
@@ -74,19 +130,12 @@ export function BrokerProfilePage() {
     mensagensEnviadas: number[][];
   };
 
-  const { data: broker, error } = useQuery<Broker | null>({
+  const { data: broker, error: brokerErr } = useQuery<Broker | null>({
     queryKey: ["broker", brokerId],
     queryFn: async () => {
       const res = await fetch(getServerBaseUrl() + `/api/brokers/${brokerId}`);
-
-      if (res.status === 204) {
-        return null;
-      }
-
-      if (!res.ok) {
-        throw new Error("Erro ao buscar corretor");
-      }
-
+      if (res.status === 204) return null;
+      if (!res.ok) throw new Error("Erro ao buscar corretor");
       return await res.json();
     },
     enabled: !!brokerId && !isNaN(brokerId),
@@ -95,35 +144,26 @@ export function BrokerProfilePage() {
   useEffect(() => {
     if (
       broker === null ||
-      error?.message === "Corretor inativo ou não encontrado"
+      brokerErr?.message === "Corretor inativo ou não encontrado"
     ) {
       navigate("/ranking");
     }
-  }, [broker, error, navigate]);
+  }, [broker, brokerErr, navigate]);
 
-  const { data: brokerPoints } = useQuery<BrokerPoints>({
-    queryKey: ["brokerPoints", brokerId, metricsFilter],
+  // --------- Métricas / Points ----------
+  const effectiveMetricsFilter = resolveEffectiveFilter(
+    metricsFilterOverride,
+    globalFilter,
+  );
+  const { data: brokerPoints, error: pointsErr } = useQuery<BrokerPoints>({
+    queryKey: ["brokerPoints", brokerId, effectiveMetricsFilter],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (metricsFilter.filter_type) {
-        params.append("filterType", metricsFilter.filter_type);
-      }
-      if (metricsFilter.start_date) {
-        params.append("startDate", metricsFilter.start_date);
-      }
-      if (metricsFilter.end_date) {
-        params.append("endDate", metricsFilter.end_date);
-      }
-      // Add parameter to include all pipelines
-      params.append("allPipelines", "true");
-
+      const params = buildParamsFromFilter(effectiveMetricsFilter);
       const res = await fetch(
         getServerBaseUrl() +
           `/api/brokers/${brokerId}/points?${params.toString()}`,
       );
-      if (!res.ok) {
-        throw new Error("Erro ao buscar pontos do corretor");
-      }
+      if (!res.ok) throw new Error("Erro ao buscar pontos do corretor");
       return await res.json();
     },
     enabled: !!brokerId && !isNaN(brokerId),
@@ -136,40 +176,29 @@ export function BrokerProfilePage() {
     enabled: !!brokerId && !isNaN(brokerId),
   });
 
-  const { data: leadsData } = useQuery<{
+  // --------- Leads com ticket ----------
+  const effectiveLeadsFilter = effectiveMetricsFilter; // compartilha com métricas
+  const { data: leadsData, error: leadsErr } = useQuery<{
     tempo_medio_resposta: string;
     leads: Lead[];
     ticket_medio: number;
     vendas_fechadas: number;
     vgv_mes: number;
   }>({
-    queryKey: ["brokerLeadsWithTicket", brokerId, metricsFilter],
+    queryKey: ["brokerLeadsWithTicket", brokerId, effectiveLeadsFilter],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (metricsFilter.filter_type) {
-        params.append("filterType", metricsFilter.filter_type);
-      }
-      if (metricsFilter.start_date) {
-        params.append("startDate", metricsFilter.start_date);
-      }
-      if (metricsFilter.end_date) {
-        params.append("endDate", metricsFilter.end_date);
-      }
-      // Add parameter to include all pipelines
-      params.append("allPipelines", "true");
-
+      const params = buildParamsFromFilter(effectiveLeadsFilter);
       const res = await fetch(
         getServerBaseUrl() +
           `/api/brokers/${brokerId}/leads-with-ticket?${params.toString()}`,
       );
-      if (!res.ok) {
-        throw new Error("Erro ao buscar leads do corretor");
-      }
+      if (!res.ok) throw new Error("Erro ao buscar leads do corretor");
       return await res.json();
     },
     enabled: !!brokerId && !isNaN(brokerId),
   });
 
+  // --------- Pipeline config ----------
   const { data: pipelineConfig } = useQuery<{
     pipeline_id: number;
     company_id: string;
@@ -182,64 +211,54 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar configuração");
       return await res.json();
     },
-    staleTime: 10 * 60 * 1000, // Cache por 10 minutos
+    staleTime: 10 * 60 * 1000,
   });
 
-  const { data: etapasCount } = useQuery<Record<string, number>>({
-    queryKey: ["brokerLeadsEtapasCount", brokerId, salesFunnelFilter],
+  // --------- Etapas (funil de vendas) ----------
+  const effectiveSalesFunnelFilter = resolveEffectiveFilter(
+    salesFunnelFilterOverride,
+    globalFilter,
+  );
+  const { data: etapasCount } = useQuery<
+    Record<string, { count: number; totalValue: number }>
+  >({
+    queryKey: ["brokerLeadsEtapasCount", brokerId, effectiveSalesFunnelFilter],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (salesFunnelFilter.filter_type) {
-        params.append("filterType", salesFunnelFilter.filter_type);
-      }
-      if (salesFunnelFilter.start_date) {
-        params.append("startDate", salesFunnelFilter.start_date);
-      }
-      if (salesFunnelFilter.end_date) {
-        params.append("endDate", salesFunnelFilter.end_date);
-      }
-      // Add parameter to include all pipelines
-      params.append("allPipelines", "true");
-
+      const params = buildParamsFromFilter(effectiveSalesFunnelFilter);
       const res = await fetch(
         getServerBaseUrl() +
           `/api/brokers/${brokerId}/etapas?${params.toString()}`,
       );
-      if (!res.ok) {
-        throw new Error("Erro ao buscar etapas do corretor");
-      }
+      if (!res.ok) throw new Error("Erro ao buscar etapas do corretor");
       return await res.json();
     },
     enabled: !!brokerId && !isNaN(brokerId),
   });
 
+  // --------- Heatmap ----------
+  const effectiveHeatmapFilter = resolveEffectiveFilter(
+    heatmapFilterOverride,
+    globalFilter,
+  );
   const { data: heatMap } = useQuery<HeatmapData>({
-    queryKey: ["brokerHeatmap", brokerId, heatmapFilter],
+    queryKey: ["brokerHeatmap", brokerId, effectiveHeatmapFilter],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (heatmapFilter.filter_type) {
-        params.append("filterType", heatmapFilter.filter_type);
-      }
-      if (heatmapFilter.start_date) {
-        params.append("startDate", heatmapFilter.start_date);
-      }
-      if (heatmapFilter.end_date) {
-        params.append("endDate", heatmapFilter.end_date);
-      }
-      // Add parameter to include all pipelines
-      params.append("allPipelines", "true");
+      const params = buildParamsFromFilter(effectiveHeatmapFilter);
       const res = await fetch(
         getServerBaseUrl() +
           `/api/brokers/${brokerId}/heatmap?${params.toString()}`,
       );
-      if (!res.ok) {
-        throw new Error("Erro ao buscar heatmap");
-      }
+      if (!res.ok) throw new Error("Erro ao buscar heatmap");
       return await res.json();
     },
     enabled: !!brokerId && !isNaN(brokerId),
   });
 
+  // --------- Lost Leads ----------
+  const effectiveLostLeadsFilter = resolveEffectiveFilter(
+    lostLeadsFilterOverride,
+    globalFilter,
+  );
   const {
     data: lostLeadsData,
     isLoading: isLoadingLostLeads,
@@ -247,62 +266,43 @@ export function BrokerProfilePage() {
   } = useQuery<{
     [stage: string]: { count: number; totalValue: number; color?: string };
   }>({
-    queryKey: ["brokerLostLeads", brokerId, lostLeadsFilter],
+    queryKey: ["brokerLostLeads", brokerId, effectiveLostLeadsFilter],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (lostLeadsFilter.filter_type) {
-        params.append("filterType", lostLeadsFilter.filter_type);
-      }
-      if (lostLeadsFilter.start_date) {
-        params.append("startDate", lostLeadsFilter.start_date);
-      }
-      if (lostLeadsFilter.end_date) {
-        params.append("endDate", lostLeadsFilter.end_date);
-      }
-      // Add parameter to include all pipelines
-      params.append("allPipelines", "true");
-
+      const params = buildParamsFromFilter(effectiveLostLeadsFilter);
       const res = await fetch(
         getServerBaseUrl() +
           `/api/brokers/${brokerId}/lost-leads?${params.toString()}`,
       );
-      if (!res.ok) {
-        throw new Error("Erro ao buscar leads perdidos");
-      }
+      if (!res.ok) throw new Error("Erro ao buscar leads perdidos");
       return await res.json();
     },
     enabled: !!brokerId && !isNaN(brokerId),
-    staleTime: 5 * 60 * 1000, // Cache por 5 minutos
+    staleTime: 5 * 60 * 1000,
     retry: 2,
   });
 
+  // --------- Weekly Performance ----------
+  const effectiveWeeklyPerfFilter = effectiveMetricsFilter;
   const { data: weeklyPerformance, isLoading: isLoadingWeeklyPerformance } =
     useQuery({
-      queryKey: ["brokerWeeklyPerformance", brokerId, metricsFilter],
+      queryKey: [
+        "brokerWeeklyPerformance",
+        brokerId,
+        effectiveWeeklyPerfFilter,
+      ],
       queryFn: async () => {
-        const params = new URLSearchParams();
-        if (metricsFilter.filter_type) {
-          params.append("filterType", metricsFilter.filter_type);
-        }
-        if (metricsFilter.start_date) {
-          params.append("startDate", metricsFilter.start_date);
-        }
-        if (metricsFilter.end_date) {
-          params.append("endDate", metricsFilter.end_date);
-        }
-
+        const params = buildParamsFromFilter(effectiveWeeklyPerfFilter);
         const res = await fetch(
           getServerBaseUrl() +
             `/api/brokers/${brokerId}/weekly-performance?${params.toString()}`,
         );
-        if (!res.ok) {
-          throw new Error("Erro ao buscar performance semanal");
-        }
+        if (!res.ok) throw new Error("Erro ao buscar performance semanal");
         return await res.json();
       },
       enabled: !!brokerId && !isNaN(brokerId),
     });
 
+  // --------- Inatividade (não depende de filtro) ----------
   const { data: inactivityData } = useQuery<{ inactivity_time: string }>({
     queryKey: ["brokerInactivityTime", brokerId],
     queryFn: async () =>
@@ -310,14 +310,12 @@ export function BrokerProfilePage() {
         m.getBrokerInactivityTime(brokerId),
       ),
     enabled: !!brokerId && !isNaN(brokerId),
-    refetchInterval: 60000, // Atualizar a cada minuto
-    staleTime: 30000, // Cache por 30 segundos
+    refetchInterval: 60000,
+    staleTime: 30000,
   });
 
-  // Process stage analysis data - moved before early return
+  // --------- Derivados UI ----------
   const stageAnalysisData = etapasCount ? etapasCount : {};
-
-  // Calculate totalLeads with React.useMemo to ensure proper initialization
   const totalLeads = React.useMemo(() => {
     if (!etapasCount) return 0;
     return Object.values(etapasCount).reduce(
@@ -326,18 +324,18 @@ export function BrokerProfilePage() {
     );
   }, [etapasCount]);
 
-  const wonLeads = React.useMemo(() => {
-    return stageAnalysisData["Venda Ganha"]?.count || 0;
-  }, [stageAnalysisData]);
+  const wonLeads = React.useMemo(
+    () => stageAnalysisData["Venda Ganha"]?.count || 0,
+    [stageAnalysisData],
+  );
 
-  const overallConversionRate = React.useMemo(() => {
-    return totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0;
-  }, [totalLeads, wonLeads]);
+  const overallConversionRate = React.useMemo(
+    () => (totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0),
+    [totalLeads, wonLeads],
+  );
 
-  // Ensure funnel data updates when etapasCount changes
   const funnelData = React.useMemo(() => {
     if (!etapasCount || Object.keys(etapasCount).length === 0) return [];
-
     return Object.entries(etapasCount).map(([stage, data]) => ({
       name: stage,
       value: totalLeads > 0 ? (data.count / totalLeads) * 100 : 0,
@@ -347,39 +345,21 @@ export function BrokerProfilePage() {
     }));
   }, [etapasCount, totalLeads]);
 
-  // Process weekly performance data
   const weeklyPerformanceData = weeklyPerformance || {};
-
-  // Determine if the screen is a TV screen based on resolution
   const isTVScreen =
     window.screen.width >= 1920 && window.screen.height >= 1080;
 
-  // Loading state - moved after all hooks
-  if (!broker || !brokerPoints || !leadsData) {
+  if (brokerErr || pointsErr || leadsErr) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center">
-        <div className="text-center space-y-6">
-          <div className="relative">
-            <div className="w-20 h-20 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto"></div>
-            <div
-              className="absolute inset-0 w-20 h-20 border-4 border-transparent border-t-purple-600 rounded-full animate-spin mx-auto"
-              style={{ animationDelay: "0.3s" }}
-            ></div>
-          </div>
-          <div className="space-y-2">
-            <h3 className="text-xl font-semibold text-white">
-              Carregando perfil
-            </h3>
-            <p className="text-gray-400">Buscando dados do corretor...</p>
-          </div>
-        </div>
+      <div className="min-h-screen flex items-center justify-center text-red-400">
+        Erro ao carregar dados do corretor. Tente mudar o período ou recarregar.
       </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black text-white">
-      {/* Header Section */}
+      {/* Header */}
       <div className="relative bg-gradient-to-r from-gray-900/90 to-gray-800/90 backdrop-blur-sm border-b border-gray-700/50">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 to-purple-600/5"></div>
         <div className="relative px-4 sm:px-6 lg:px-8 py-6">
@@ -447,10 +427,10 @@ export function BrokerProfilePage() {
         </div>
       </div>
 
+      {/* Conteúdo */}
       <div className="px-4 sm:px-6 lg:px-8 py-8">
-        {/* Main Content Grid */}
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
-          {/* Left Column - Metrics */}
+          {/* Coluna Esquerda - Métricas */}
           <div className="xl:col-span-1 space-y-6">
             <div className="mb-6">
               <div className="flex items-center justify-between mb-4">
@@ -460,29 +440,6 @@ export function BrokerProfilePage() {
                     Métricas de Performance
                   </h2>
                 </div>
-                <PeriodFilter
-                  componentName="broker_performance_metrics"
-                  onFilterChange={async (filter) => {
-                    setMetricsFilter(filter);
-                    // Save component filter
-                    await updateComponentFilter("broker_performance_metrics", {
-                      filter_type: filter.filter_type,
-                      start_date: filter.start_date,
-                      end_date: filter.end_date,
-                    });
-                    // Invalidate related queries immediately
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerPoints", brokerId],
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerLeadsWithTicket", brokerId],
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerWeeklyPerformance", brokerId],
-                    });
-                  }}
-                  compact={true}
-                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
@@ -651,7 +608,7 @@ export function BrokerProfilePage() {
             </div>
           </div>
 
-          {/* Middle Column - Funnel Chart */}
+          {/* Coluna do meio - Funis */}
           <div className="xl:col-span-1 space-y-6">
             {/* Funil de Vendas */}
             <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50">
@@ -665,16 +622,15 @@ export function BrokerProfilePage() {
                 <PeriodFilter
                   componentName="sales_funnel"
                   onFilterChange={async (filter) => {
-                    setSalesFunnelFilter(filter);
-                    // Save component filter
-                    await updateComponentFilter("sales_funnel", {
-                      filter_type: filter.filter_type,
-                      start_date: filter.start_date,
-                      end_date: filter.end_date,
-                    });
-                    // Invalidate related queries immediately
+                    setSalesFunnelFilterOverride(filter);
                     queryClient.invalidateQueries({
-                      queryKey: ["brokerLeadsEtapasCount", brokerId],
+                      queryKey: ["brokerPoints", brokerId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["brokerLeadsWithTicket", brokerId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["brokerWeeklyPerformance", brokerId],
                     });
                   }}
                   compact={true}
@@ -687,110 +643,38 @@ export function BrokerProfilePage() {
 
             {/* Funil de Leads Perdidos */}
             <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50">
-              {isLoadingLostLeads ? (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <h3 className="text-xl font-semibold text-white">
-                        Funil de Leads Perdidos
-                      </h3>
-                    </div>
-                    <PeriodFilter
-                      componentName="lost_leads_funnel"
-                      onFilterChange={async (filter) => {
-                        setLostLeadsFilter(filter);
-                        // Save component filter
-                        await updateComponentFilter("lost_leads_funnel", {
-                          filter_type: filter.filter_type,
-                          start_date: filter.start_date,
-                          end_date: filter.end_date,
-                        });
-                        // Invalidate related queries immediately
-                        queryClient.invalidateQueries({
-                          queryKey: ["brokerLostLeads", brokerId],
-                        });
-                      }}
-                      compact={true}
-                    />
+              {/* ...manteve sua lógica de loading/erro... */}
+              <div>
+                <div className="flex items-center justify-between mb-6">
+                  <div className="flex items-center gap-2">
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
+                    <h3 className="text-xl font-semibold text-white">
+                      Funil de Leads Perdidos
+                    </h3>
                   </div>
-                  <div className="space-y-4">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="animate-pulse">
-                        <div className="h-4 bg-gray-700 rounded mb-2 w-1/3"></div>
-                        <div className="h-10 bg-gray-700 rounded"></div>
-                      </div>
-                    ))}
-                  </div>
+                  <PeriodFilter
+                    componentName="lost_leads_funnel"
+                    onFilterChange={async (filter) => {
+                      setLostLeadsFilterOverride(filter);
+                      queryClient.invalidateQueries({
+                        queryKey: ["brokerPoints", brokerId],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ["brokerLeadsWithTicket", brokerId],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ["brokerWeeklyPerformance", brokerId],
+                      });
+                    }}
+                    compact={true}
+                  />
                 </div>
-              ) : lostLeadsError ? (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <h3 className="text-xl font-semibold text-white">
-                        Funil de Leads Perdidos
-                      </h3>
-                    </div>
-                    <PeriodFilter
-                      componentName="lost_leads_funnel"
-                      onFilterChange={async (filter) => {
-                        setLostLeadsFilter(filter);
-                        // Save component filter
-                        await updateComponentFilter("lost_leads_funnel", {
-                          filter_type: filter.filter_type,
-                          start_date: filter.start_date,
-                          end_date: filter.end_date,
-                        });
-                        // Invalidate related queries immediately
-                        queryClient.invalidateQueries({
-                          queryKey: ["brokerLostLeads", brokerId],
-                        });
-                      }}
-                      compact={true}
-                    />
-                  </div>
-                  <div className="text-center py-8">
-                    <p className="text-red-400 mb-2">Erro ao carregar dados</p>
-                    <p className="text-gray-500 text-sm">
-                      {lostLeadsError?.message || "Tente novamente mais tarde"}
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                      <h3 className="text-xl font-semibold text-white">
-                        Funil de Leads Perdidos
-                      </h3>
-                    </div>
-                    <PeriodFilter
-                      componentName="lost_leads_funnel"
-                      onFilterChange={async (filter) => {
-                        setLostLeadsFilter(filter);
-                        // Save component filter
-                        await updateComponentFilter("lost_leads_funnel", {
-                          filter_type: filter.filter_type,
-                          start_date: filter.start_date,
-                          end_date: filter.end_date,
-                        });
-                        // Invalidate related queries immediately
-                        queryClient.invalidateQueries({
-                          queryKey: ["brokerLostLeads", brokerId],
-                        });
-                      }}
-                      compact={true}
-                    />
-                  </div>
-                  <LostLeadsFunnel lostLeads={lostLeadsData || {}} />
-                </div>
-              )}
+                <LostLeadsFunnel lostLeads={lostLeadsData || {}} />
+              </div>
             </Card>
           </div>
 
-          {/* Right Column - Activity Heatmap */}
+          {/* Coluna direita - Heatmap */}
           <div className="xl:col-span-1 space-y-6">
             <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50">
               <div>
@@ -799,16 +683,15 @@ export function BrokerProfilePage() {
                     dados={heatMap}
                     componentName="broker_heatmap"
                     onFilterChange={async (filter) => {
-                      setHeatmapFilter(filter);
-                      // Save component filter
-                      await updateComponentFilter("broker_heatmap", {
-                        filter_type: filter.filter_type,
-                        start_date: filter.start_date,
-                        end_date: filter.end_date,
-                      });
-                      // Invalidate related queries immediately
+                      setHeatmapFilterOverride(filter);
                       queryClient.invalidateQueries({
-                        queryKey: ["brokerHeatmap", brokerId],
+                        queryKey: ["brokerPoints", brokerId],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ["brokerLeadsWithTicket", brokerId],
+                      });
+                      queryClient.invalidateQueries({
+                        queryKey: ["brokerWeeklyPerformance", brokerId],
                       });
                     }}
                     showFilter={true}

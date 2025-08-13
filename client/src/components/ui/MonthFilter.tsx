@@ -1,5 +1,11 @@
 import React, { useState, useEffect } from "react";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./select";
 import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 
 interface MonthFilterProps {
@@ -29,15 +35,20 @@ const months = [
   { value: 12, label: "Dezembro" },
 ];
 
-export function MonthFilter({ 
-  componentName, 
-  onFilterChange, 
+export function MonthFilter({
+  componentName,
+  onFilterChange,
   compact = false,
-  className = ""
+  className = "",
 }: MonthFilterProps) {
-  const { currentFilter, setGlobalFilter, updateComponentFilter } = useUnifiedFilter();
-  const [selectedMonth, setSelectedMonth] = useState(currentFilter.month || new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(currentFilter.year || new Date().getFullYear());
+  const { currentFilter, setGlobalFilter, updateComponentFilter } =
+    useUnifiedFilter();
+  const [selectedMonth, setSelectedMonth] = useState(
+    currentFilter.month || new Date().getMonth() + 1,
+  );
+  const [selectedYear, setSelectedYear] = useState(
+    currentFilter.year || new Date().getFullYear(),
+  );
 
   // Generate years (current year + 2 previous years)
   const currentDate = new Date();
@@ -59,14 +70,14 @@ export function MonthFilter({
     setSelectedMonth(month);
     setSelectedYear(year);
 
-    const filterData = { 
+    const filterData = {
       filter_type: "month",
-      month, 
-      year 
+      month,
+      year,
     };
 
     // Update global filter (this will propagate to all components)
-    await setGlobalFilter(filterData);
+    setGlobalFilter(filterData);
 
     // Notify parent component
     onFilterChange({ month, year });
@@ -76,7 +87,9 @@ export function MonthFilter({
     <div className={`flex gap-2 ${className}`}>
       <Select
         value={selectedMonth.toString()}
-        onValueChange={(value) => handleFilterChange(parseInt(value), selectedYear)}
+        onValueChange={(value) =>
+          handleFilterChange(parseInt(value), selectedYear)
+        }
       >
         <SelectTrigger className="w-[140px]">
           <SelectValue />
@@ -92,7 +105,9 @@ export function MonthFilter({
 
       <Select
         value={selectedYear.toString()}
-        onValueChange={(value) => handleFilterChange(selectedMonth, parseInt(value))}
+        onValueChange={(value) =>
+          handleFilterChange(selectedMonth, parseInt(value))
+        }
       >
         <SelectTrigger className="w-[100px]">
           <SelectValue />

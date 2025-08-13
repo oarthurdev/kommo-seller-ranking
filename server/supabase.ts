@@ -516,6 +516,8 @@ async function calculateBrokerMetricsAllPipelines(
         performanceFilter?.filter_type || "current_month",
         performanceFilter?.start_date,
         performanceFilter?.end_date,
+        performanceFilter?.month,
+        performanceFilter?.year,
       );
       currentPeriodStart = period.start;
       currentPeriodEnd = period.end;
@@ -708,6 +710,8 @@ export async function getBrokerLeads(brokerId: number, companyId: string) {
       salesFilter?.filter_type || "current_month",
       salesFilter?.start_date,
       salesFilter?.end_date,
+      salesFilter?.month,
+      salesFilter?.year,
     );
 
     // Usar período do filtro
@@ -754,6 +758,8 @@ export async function getBrokerLeadsWithTicket(
         salesFilter?.filter_type || "current_month",
         salesFilter?.start_date,
         salesFilter?.end_date,
+        salesFilter?.month,
+        salesFilter?.year,
       );
     }
 
@@ -1009,6 +1015,8 @@ export async function getBrokerLeadEtapaCounts(
       salesFilter?.filter_type || "current_month",
       salesFilter?.start_date,
       salesFilter?.end_date,
+      salesFilter?.month,
+      salesFilter?.year,
     );
 
     // Usar período do filtro
@@ -1119,9 +1127,11 @@ export async function getActivityHeatmap(
         "broker_heatmap",
       );
       const period = getDateRange(
-        heatmapFilter?.filter_type || "current_week",
+        heatmapFilter?.filter_type || "current_month",
         heatmapFilter?.start_date,
         heatmapFilter?.end_date,
+        heatmapFilter?.month,
+        heatmapFilter?.year,
       );
 
       if (heatmapFilter && heatmapFilter.filter_type !== "current_week") {
@@ -2134,6 +2144,8 @@ export async function getLostLeadsByStage(
       lostLeadsFilter?.filter_type || "current_month",
       lostLeadsFilter?.start_date,
       lostLeadsFilter?.end_date,
+      lostLeadsFilter?.month,
+      lostLeadsFilter?.year,
     );
     currentPeriodStartUTC = period.start;
     currentPeriodEndUTC = period.end;
@@ -2390,6 +2402,8 @@ export async function getBrokerWeeklyPerformanceMetrics(
       filter?.filter_type || "current_month",
       filter?.start_date,
       filter?.end_date,
+      filter?.month,
+      filter?.year,
     );
     const currentPeriodStartUTC = period.start;
     const currentPeriodEndUTC = period.end;
@@ -3337,21 +3351,57 @@ export function getDateRange(
   filterType: string,
   startDate?: string,
   endDate?: string,
+  month?: string | number,
+  year?: string | number,
 ): { start: Date; end: Date; startFormatted: string; endFormatted: string } {
   const now = new Date();
 
-  // Helper function to format date as YYYY-MM-DD HH:MM:SS for database compatibility
   const formatDateForDB = (date: Date): string => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const hours = String(date.getHours()).padStart(2, "0");
-    const minutes = String(date.getMinutes()).padStart(2, "0");
-    const seconds = String(date.getSeconds()).padStart(2, "0");
-    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    const ss = String(date.getSeconds()).padStart(2, "0");
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
   };
 
   switch (filterType) {
+    // ✅ NOVO: mês/ano selecionados manualmente no frontend
+    case "month": {
+      const m = Number(month);
+      const y = Number(year);
+      const base =
+        !Number.isNaN(m) && m >= 1 && m <= 12 && !Number.isNaN(y)
+          ? new Date(y, m - 1, 1)
+          : new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const start = new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        1,
+        0,
+        0,
+        0,
+        0,
+      );
+      const end = new Date(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      return {
+        start,
+        end,
+        startFormatted: formatDateForDB(start),
+        endFormatted: formatDateForDB(end),
+      };
+    }
     case "7_days":
       const sevenDaysAgo = new Date(now);
       sevenDaysAgo.setDate(now.getDate() - 7);

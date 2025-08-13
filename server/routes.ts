@@ -156,20 +156,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
-      const { filterType, startDate, endDate, allPipelines } = req.query;
-
-      if (isNaN(brokerId) || !brokerId) {
-        return res.status(400).json({ error: "ID do corretor inválido" });
-      }
-
-      if (!companyId) {
-        return res.status(400).json({ error: "Company ID não encontrado" });
-      }
+      const { filterType, startDate, endDate, allPipelines, month, year } =
+        req.query;
 
       const { startFormatted, endFormatted } = getDateRange(
         filterType as string,
         startDate as string,
         endDate as string,
+        month as string,
+        year as string,
       );
 
       const points = await getBrokerPoints(
@@ -331,12 +326,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
-      const { filterType, startDate, endDate, allPipelines } = req.query;
+      const { filterType, startDate, endDate, allPipelines, month, year } =
+        req.query;
 
       const { startFormatted, endFormatted } = getDateRange(
         filterType as string,
         startDate as string,
         endDate as string,
+        month as string,
+        year as string,
       );
 
       const result = await getBrokerLeadsWithTicket(
@@ -361,12 +359,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const brokerId = req.params.id;
       const companyId = (req as any).companyId;
-      const { filterType, startDate, endDate, allPipelines } = req.query;
+      const { filterType, startDate, endDate, allPipelines, month, year } =
+        req.query;
 
       const { startFormatted, endFormatted } = getDateRange(
         filterType as string,
         startDate as string,
         endDate as string,
+        month as string,
+        year as string,
       );
 
       // Timeout para evitar travamento
@@ -425,12 +426,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
-      const { filterType, startDate, endDate, allPipelines } = req.query;
+      const { filterType, startDate, endDate, allPipelines, month, year } =
+        req.query;
 
       const { startFormatted, endFormatted } = getDateRange(
         filterType as string,
         startDate as string,
         endDate as string,
+        month as string,
+        year as string,
       );
 
       const etapas = await getBrokerLeadEtapaCounts(
@@ -487,12 +491,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
-      const { filterType, startDate, endDate, allPipelines } = req.query;
+      const { filterType, startDate, endDate, allPipelines, month, year } =
+        req.query;
 
       const { startFormatted, endFormatted } = getDateRange(
         filterType as string,
         startDate as string,
         endDate as string,
+        month as string,
+        year as string,
       );
 
       const heatmap = await getActivityHeatmap(
@@ -569,7 +576,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
-      const { filterType, startDate, endDate } = req.query;
+      const { filterType, startDate, endDate, allPipelines, month, year } =
+        req.query;
 
       let filter = null;
       if (filterType) {
@@ -577,6 +585,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           filter_type: filterType as string,
           start_date: startDate as string,
           end_date: endDate as string,
+          month: month ? Number(month) : undefined,
+          year: year ? Number(year) : undefined,
         };
       }
 
@@ -708,64 +718,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Component filters endpoints
-  app.get('/api/component-filters/:componentName', async (req, res) => {
+  app.get("/api/component-filters/:componentName", async (req, res) => {
     try {
       const { componentName } = req.params;
       const companyId = (req as any).companyId;
 
       if (!companyId) {
-        return res.status(400).json({ error: 'Company ID required' });
+        return res.status(400).json({ error: "Company ID required" });
       }
 
       const { data: filter, error } = await supabase
-        .from('component_filters')
-        .select('*')
-        .eq('company_id', companyId)
-        .eq('component_name', componentName)
+        .from("component_filters")
+        .select("*")
+        .eq("company_id", companyId)
+        .eq("component_name", componentName)
         .single();
 
-      if (error && error.code !== 'PGRST116') {
+      if (error && error.code !== "PGRST116") {
         throw error;
       }
 
       res.json(filter);
     } catch (error) {
-      console.error('Error fetching component filter:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error("Error fetching component filter:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  app.post('/api/component-filters/:componentName', async (req, res) => {
+  app.post("/api/component-filters/:componentName", async (req, res) => {
     try {
       const { componentName } = req.params;
       const { filter_type, start_date, end_date, month, year } = req.body;
       const companyId = (req as any).companyId;
 
       if (!companyId) {
-        return res.status(400).json({ error: 'Company ID required' });
+        return res.status(400).json({ error: "Company ID required" });
       }
 
       // Check if filter already exists
       const { data: existingFilter } = await supabase
-        .from('component_filters')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('component_name', componentName)
+        .from("component_filters")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("component_name", componentName)
         .single();
 
       if (existingFilter) {
         // Update existing filter
         const { data, error } = await supabase
-          .from('component_filters')
+          .from("component_filters")
           .update({
             filter_type,
             start_date: start_date || null,
             end_date: end_date || null,
             month: month || null,
             year: year || null,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', existingFilter.id)
+          .eq("id", existingFilter.id)
           .select()
           .single();
 
@@ -774,7 +784,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Create new filter
         const { data, error } = await supabase
-          .from('component_filters')
+          .from("component_filters")
           .insert({
             company_id: companyId,
             component_name: componentName,
@@ -782,7 +792,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             start_date: start_date || null,
             end_date: end_date || null,
             month: month || null,
-            year: year || null
+            year: year || null,
           })
           .select()
           .single();
@@ -791,41 +801,42 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(data);
       }
     } catch (error) {
-      console.error('Error saving component filter:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error("Error saving component filter:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  app.post('/api/component-filters', async (req, res) => {
+  app.post("/api/component-filters", async (req, res) => {
     try {
-      const { component_name, filter_type, start_date, end_date, month, year } = req.body;
+      const { component_name, filter_type, start_date, end_date, month, year } =
+        req.body;
       const companyId = (req as any).companyId;
 
       if (!companyId) {
-        return res.status(400).json({ error: 'Company ID required' });
+        return res.status(400).json({ error: "Company ID required" });
       }
 
       // Check if filter already exists
       const { data: existingFilter } = await supabase
-        .from('component_filters')
-        .select('id')
-        .eq('company_id', companyId)
-        .eq('component_name', component_name)
+        .from("component_filters")
+        .select("id")
+        .eq("company_id", companyId)
+        .eq("component_name", component_name)
         .single();
 
       if (existingFilter) {
         // Update existing filter
         const { data, error } = await supabase
-          .from('component_filters')
+          .from("component_filters")
           .update({
             filter_type,
             start_date: start_date || null,
             end_date: end_date || null,
             month: month || null,
             year: year || null,
-            updated_at: new Date().toISOString()
+            updated_at: new Date().toISOString(),
           })
-          .eq('id', existingFilter.id)
+          .eq("id", existingFilter.id)
           .select()
           .single();
 
@@ -834,7 +845,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } else {
         // Create new filter
         const { data, error } = await supabase
-          .from('component_filters')
+          .from("component_filters")
           .insert({
             company_id: companyId,
             component_name,
@@ -842,7 +853,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             start_date: start_date || null,
             end_date: end_date || null,
             month: month || null,
-            year: year || null
+            year: year || null,
           })
           .select()
           .single();
@@ -851,23 +862,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.json(data);
       }
     } catch (error) {
-      console.error('Error saving component filter:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error("Error saving component filter:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
-  app.put('/api/component-filters/:id', async (req, res) => {
+  app.put("/api/component-filters/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { component_name, filter_type, start_date, end_date, month, year } = req.body;
+      const { component_name, filter_type, start_date, end_date, month, year } =
+        req.body;
       const companyId = (req as any).companyId;
 
       if (!companyId) {
-        return res.status(400).json({ error: 'Company ID required' });
+        return res.status(400).json({ error: "Company ID required" });
       }
 
       const { data, error } = await supabase
-        .from('component_filters')
+        .from("component_filters")
         .update({
           component_name,
           filter_type,
@@ -875,18 +887,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           end_date: end_date || null,
           month: month || null,
           year: year || null,
-          updated_at: new Date().toISOString()
+          updated_at: new Date().toISOString(),
         })
-        .eq('id', id)
-        .eq('company_id', companyId)
+        .eq("id", id)
+        .eq("company_id", companyId)
         .select()
         .single();
 
       if (error) throw error;
       res.json(data);
     } catch (error) {
-      console.error('Error updating component filter:', error);
-      res.status(500).json({ error: 'Internal server error' });
+      console.error("Error updating component filter:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
