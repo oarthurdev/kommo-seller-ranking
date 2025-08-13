@@ -12,8 +12,10 @@ interface RecalculationActions {
 }
 
 interface BrokerPointsStatus {
-  status: "processing" | "finished" | "error";
+  status: "processing" | "finished" | "error" | "waiting"; // Added "waiting" status
   progress?: number;
+  is_calculating?: boolean; // Added is_calculating field
+  completion_percentage?: number; // Added completion_percentage field for more precise progress
 }
 
 export function useRecalculation(): RecalculationState & RecalculationActions {
@@ -31,7 +33,8 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
       return await response.json();
     } catch (error) {
       console.error("Error checking broker points status:", error);
-      return { status: "error" };
+      // Returning a default error state that includes is_calculating for consistent handling
+      return { status: "error", is_calculating: false };
     }
   };
 
@@ -48,7 +51,8 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
       const poll = async (): Promise<void> => {
         const status = await checkBrokerPointsStatus();
 
-        if (status.status === "finished") {
+        // Check if calculation is truly finished (status = "finished" AND is_calculating = false)
+        if (status.status === 'finished' && !status.is_calculating) {
           setProgress(100);
           // Small delay to show 100% completion
           await new Promise((resolve) => setTimeout(resolve, 500));
@@ -57,17 +61,18 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
           return;
         }
 
-        if (status.status === "error") {
+        if (status.status === 'error') {
           console.error("Error in broker points calculation");
           setIsRecalculating(false);
           setProgress(0);
           return;
         }
 
-        // Update progress if available, otherwise simulate based on time elapsed
-        if (status.progress !== undefined) {
-          setProgress(Math.min(status.progress, 95));
+        // Update progress based on completion_percentage from API
+        if (status.completion_percentage !== undefined) {
+          setProgress(Math.min(status.completion_percentage, 95));
         } else {
+          // Fallback: simulate progress based on time elapsed
           const timeElapsed = Date.now() - startTime;
           const estimatedProgress = Math.min(
             (timeElapsed / maxPollingTime) * 90,
@@ -84,8 +89,8 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
           return;
         }
 
-        // Continue polling if still processing
-        if (status.status === "processing") {
+        // Continue polling if still calculating OR status is waiting
+        if (status.is_calculating || status.status === "waiting") {
           setTimeout(poll, pollInterval);
         }
       };

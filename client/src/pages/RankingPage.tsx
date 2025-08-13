@@ -170,12 +170,20 @@ export function RankingPage() {
   const isLoading = isLoadingBrokers || isLoadingMetrics || isRecalculating;
 
   const handleFilterChange = async (_filter: MonthFilterData) => {
-    // Iniciar processo de recálculo
-    await startRecalculation();
+    try {
+      // Iniciar processo de recálculo e aguardar completar
+      await startRecalculation();
 
-    // Invalidar queries para buscar dados atualizados
-    queryClient.invalidateQueries({ queryKey: ["rankings"] });
-    queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
+      // Só depois que o recálculo terminar, invalidar e refazer as queries
+      await queryClient.invalidateQueries({ queryKey: ["rankings"] });
+      await queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
+      
+      // Forçar refetch dos dados atualizados
+      await refetchBrokers();
+      await refetchMetrics();
+    } catch (error) {
+      console.error("Erro durante o processo de recálculo:", error);
+    }
   };
 
   // Removed automatic refetch interval to prevent unnecessary API calls
@@ -301,8 +309,8 @@ export function RankingPage() {
                   <h3 className="text-lg font-semibold text-orange-400">Recalculando Pontuação</h3>
                 </div>
                 <p className="text-gray-300 mb-4">
-                  Estamos processando os dados do período selecionado e recalculando a pontuação de todos os corretores. 
-                  Este processo é executado em tempo real e garante que você visualize informações precisas e atualizadas.
+                  Aguarde! Estamos processando os dados do período selecionado e recalculando a pontuação de todos os corretores. 
+                  Os cards serão exibidos somente após a conclusão do cálculo para garantir informações precisas e atualizadas.
                 </p>
                 <div className="w-full bg-gray-700 rounded-full h-2 mb-2">
                   <div 
@@ -311,7 +319,12 @@ export function RankingPage() {
                   ></div>
                 </div>
                 <div className="flex justify-between text-sm text-gray-400">
-                  <span>Processando dados...</span>
+                  <span>
+                    {recalculationProgress >= 100 
+                      ? "Finalizando..." 
+                      : "Processando dados do período selecionado..."
+                    }
+                  </span>
                   <span>{Math.round(recalculationProgress)}%</span>
                 </div>
               </div>
