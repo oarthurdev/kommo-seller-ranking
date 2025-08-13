@@ -1010,6 +1010,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Recalculate broker points endpoint
+  app.post("/api/recalculate-broker-points", companyContext, async (req, res) => {
+    try {
+      const companyId = (req as any).companyId;
+      
+      if (!companyId) {
+        return res.status(400).json({ error: "Company ID required" });
+      }
+
+      console.log(`Triggering broker points recalculation for company: ${companyId}`);
+
+      const response = await fetch(`https://sync.imobiliario.tec.br/recalculate-broker-points/${companyId}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`Broker points recalculation response:`, data);
+      
+      res.json(data);
+    } catch (error) {
+      console.error("Error triggering broker points recalculation:", error);
+      res.status(500).json({ 
+        status: 'error',
+        message: 'Failed to trigger broker points recalculation' 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

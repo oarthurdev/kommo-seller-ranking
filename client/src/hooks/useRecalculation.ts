@@ -43,6 +43,25 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
     setProgress(0);
 
     try {
+      // First, trigger the recalculation
+      console.log("Triggering broker points recalculation...");
+      const triggerResponse = await fetch(
+        getServerBaseUrl() + "/api/recalculate-broker-points",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      if (!triggerResponse.ok) {
+        throw new Error("Failed to trigger broker points recalculation");
+      }
+
+      const triggerData = await triggerResponse.json();
+      console.log("Recalculation triggered:", triggerData);
+
       // Poll the status endpoint until calculation is finished
       const pollInterval = 1000; // Check every second
       const maxPollingTime = 300000; // Max 5 minutes
