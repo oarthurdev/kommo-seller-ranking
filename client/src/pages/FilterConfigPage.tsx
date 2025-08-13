@@ -40,7 +40,7 @@ const FILTER_TYPE_OPTIONS = [
   { value: "current_month", label: "Mês Atual" },
   { value: "last_month", label: "Mês Passado" },
   { value: "custom_range", label: "Período Personalizado" },
-  { value: "month_year", label: "Filtro por Mês/Ano (Global)" },
+  { value: "month", label: "Filtro por Mês/Ano (Global)" },
 ];
 
 export function FilterConfigPage() {

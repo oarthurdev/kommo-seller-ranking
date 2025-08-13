@@ -60,7 +60,7 @@ export function MonthFilter({
     setSelectedYear(year);
 
     const filterData = { 
-      filter_type: "month_year",
+      filter_type: "month",
       month, 
       year 
     };

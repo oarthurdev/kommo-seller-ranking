@@ -38,7 +38,7 @@ export function calculateFilterPeriod(filter: ComponentFilter | null) {
   };
   
   switch (filter?.filter_type) {
-    case "month_year":
+    case "month":
       if (filter.month && filter.year) {
         const startOfMonth = new Date(filter.year, filter.month - 1, 1);
         const endOfMonth = new Date(filter.year, filter.month, 0, 23, 59, 59, 999);
@@ -147,7 +147,7 @@ export function calculateFilterPeriod(filter: ComponentFilter | null) {
 
 export function getFilterDescription(filter: ComponentFilter | null): string {
   switch (filter?.filter_type) {
-    case "month_year":
+    case "month":
       if (filter.month && filter.year) {
         const monthNames = [
           "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",

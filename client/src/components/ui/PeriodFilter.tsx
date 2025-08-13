@@ -36,7 +36,7 @@ const FILTER_OPTIONS = [
   { value: "current_month", label: "Mês Atual" },
   { value: "last_month", label: "Mês Passado" },
   { value: "custom_range", label: "Período Personalizado" },
-  { value: "month_year", label: "Filtro por Mês/Ano (Global)" },
+  { value: "month", label: "Filtro por Mês/Ano (Global)" },
 ];
 
 export function PeriodFilter({
@@ -46,7 +46,7 @@ export function PeriodFilter({
   compact = false,
 }: PeriodFilterProps) {
   const { currentFilter, updateComponentFilter, getComponentFilter } = useUnifiedFilter();
-  const [filterType, setFilterType] = useState("month_year");
+  const [filterType, setFilterType] = useState("month");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
@@ -70,9 +70,9 @@ export function PeriodFilter({
           setEndDate(newEndDate);
 
           // If using global filter, apply current global values
-          if (newFilterType === "month_year") {
+          if (newFilterType === "month") {
             onFilterChange({
-              filter_type: "month_year",
+              filter_type: "month",
               month: currentFilter.month,
               year: currentFilter.year,
             });
@@ -86,7 +86,7 @@ export function PeriodFilter({
         } else {
           // Default to global filter
           onFilterChange({
-            filter_type: "month_year",
+            filter_type: "month",
             month: currentFilter.month,
             year: currentFilter.year,
           });
@@ -101,9 +101,9 @@ export function PeriodFilter({
 
   // Update when global filter changes
   useEffect(() => {
-    if (filterType === "month_year") {
+    if (filterType === "month") {
       onFilterChange({
-        filter_type: "month_year",
+        filter_type: "month",
         month: currentFilter.month,
         year: currentFilter.year,
       });
@@ -113,7 +113,7 @@ export function PeriodFilter({
   const handleFilterTypeChange = (value: string) => {
     setFilterType(value);
 
-    if (value === "month_year") {
+    if (value === "month") {
       applyFilter(value, "", "", currentFilter.month, currentFilter.year);
     } else if (value !== "custom_range") {
       applyFilter(value, "", "");
@@ -164,7 +164,7 @@ export function PeriodFilter({
   };
 
   const getCurrentFilterLabel = () => {
-    if (filterType === "month_year") {
+    if (filterType === "month") {
       return `${currentFilter.month}/${currentFilter.year}`;
     }
     
@@ -185,7 +185,7 @@ export function PeriodFilter({
           <SelectContent>
             {FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.value === "month_year" 
+                {option.value === "month" 
                   ? `${option.label} (${currentFilter.month}/${currentFilter.year})`
                   : option.label
                 }
@@ -241,7 +241,7 @@ export function PeriodFilter({
           <SelectContent>
             {FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.value === "month_year" 
+                {option.value === "month" 
                   ? `${option.label} (${currentFilter.month}/${currentFilter.year})`
                   : option.label
                 }

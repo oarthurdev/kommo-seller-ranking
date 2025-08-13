@@ -24,7 +24,7 @@ const UnifiedFilterContext = createContext<UnifiedFilterContextType | null>(null
 export function UnifiedFilterProvider({ children }: { children: React.ReactNode }) {
   const currentDate = new Date();
   const [currentFilter, setCurrentFilter] = useState<UnifiedFilterData>({
-    filter_type: "month_year",
+    filter_type: "month",
     month: currentDate.getMonth() + 1,
     year: currentDate.getFullYear(),
   });
@@ -39,9 +39,9 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
         if (response.ok) {
           const filter = await response.json();
           if (filter && (filter.month || filter.filter_type)) {
-            const globalFilter = filter.filter_type === "month_year" && filter.month && filter.year
+            const globalFilter = filter.filter_type === "month" && filter.month && filter.year
               ? {
-                  filter_type: "month_year",
+                  filter_type: "month",
                   month: filter.month,
                   year: filter.year,
                 }

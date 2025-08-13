@@ -135,7 +135,7 @@ export function RankingPage() {
     
     // Convert MonthFilterData to UnifiedFilterData and set as global filter
     const unifiedFilter = {
-      filter_type: "month_year",
+      filter_type: "month",
       month: filter.month,
       year: filter.year,
     };
