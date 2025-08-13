@@ -17,6 +17,7 @@ import { MonthFilter, type MonthFilterData } from "@/components/ui/MonthFilter";
 import { useBranding } from "@/lib/brandingContext";
 import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 import { useSaleAlerts } from "@/hooks/useSaleAlerts";
+import { useRecalculation } from "@/hooks/useRecalculation";
 import { Toaster } from "@/components/ui/toaster";
 import { TVSimulator } from "@/components/ui/TVSimulator";
 import { TVIndicator } from "@/components/ui/TVIndicator";
@@ -58,6 +59,7 @@ export function RankingPage() {
   const currentDate = new Date();
   const { branding } = useBranding();
   const { currentFilter, isHydrated } = useUnifiedFilter();
+  const { isRecalculating, progress: recalculationProgress, startRecalculation } = useRecalculation();
 
   // Sale alerts
   useSaleAlerts();
@@ -117,7 +119,7 @@ export function RankingPage() {
 
       return await res.json();
     },
-    enabled: isHydrated,
+    enabled: isHydrated && !isRecalculating,
   });
 
   const {
@@ -151,6 +153,7 @@ export function RankingPage() {
 
       return await res.json();
     },
+    enabled: !isRecalculating,
   });
 
   useEffect(() => {
@@ -164,13 +167,15 @@ export function RankingPage() {
     setResetProgress((prev) => prev + 1);
   };
 
-  const isLoading = isLoadingBrokers || isLoadingMetrics;
+  const isLoading = isLoadingBrokers || isLoadingMetrics || isRecalculating;
 
   const handleFilterChange = async (_filter: MonthFilterData) => {
-    // nada de setCurrentFilter, nada de setGlobalFilter aqui
+    // Iniciar processo de recálculo
+    await startRecalculation();
+
+    // Invalidar queries para buscar dados atualizados
     queryClient.invalidateQueries({ queryKey: ["rankings"] });
     queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
-    // invalide outras queries da página se precisar
   };
 
   // Removed automatic refetch interval to prevent unnecessary API calls
@@ -213,10 +218,17 @@ export function RankingPage() {
                       "Classificação baseada na produtividade"}
                   </p>
                   <div className="flex items-center gap-4">
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-300 rounded-full border border-green-500/30">
-                      <Activity className="w-4 h-4" />
-                      <span className="text-sm font-medium">Tempo Real</span>
-                    </div>
+                    {isRecalculating ? (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-500/20 text-orange-300 rounded-full border border-orange-500/30">
+                        <div className="w-4 h-4 border-2 border-orange-300 border-t-transparent rounded-full animate-spin"></div>
+                        <span className="text-sm font-medium">Recalculando... {recalculationProgress}%</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 px-3 py-1.5 bg-green-500/20 text-green-300 rounded-full border border-green-500/30">
+                        <Activity className="w-4 h-4" />
+                        <span className="text-sm font-medium">Tempo Real</span>
+                      </div>
+                    )}
                     {/* <a
                       href="/ranking/retrospective"
                       className="flex items-center gap-2 px-3 py-1.5 bg-purple-500/20 text-purple-300 rounded-full border border-purple-500/30 hover:bg-purple-500/30 transition-colors"
@@ -281,6 +293,25 @@ export function RankingPage() {
                 Classificação Geral
               </h2>
             </div>
+
+            {isRecalculating && (
+              <div className="mb-8 p-6 bg-gradient-to-r from-orange-500/10 to-yellow-500/10 border border-orange-500/20 rounded-xl">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-6 h-6 border-2 border-orange-400 border-t-transparent rounded-full animate-spin"></div>
+                  <h3 className="text-lg font-semibold text-orange-400">Recalculando Pontuação</h3>
+                </div>
+                <p className="text-gray-300 mb-4">
+                  Estamos processando os dados do período selecionado e recalculando a pontuação de todos os corretores. 
+                  Este processo garante que você visualize informações precisas e atualizadas. Aguarde alguns instantes...
+                </p>
+                <div className="w-full bg-gray-700 rounded-full h-2">
+                  <div 
+                    className="bg-gradient-to-r from-orange-400 to-yellow-400 h-2 rounded-full transition-all duration-300"
+                    style={{ width: `${recalculationProgress}%` }}
+                  ></div>
+                </div>
+              </div>
+            )}
 
             {isLoading ? (
               <div
