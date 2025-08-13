@@ -479,24 +479,7 @@ export function BrokerProfilePage() {
                       : "R$ 0"}
                   </p>
                 </Card>
-
-                <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50 hover:border-gray-600/50 transition-all duration-200">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center">
-                      <Clock className="text-blue-400 w-5 h-5" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-medium text-gray-400">
-                        Tempo médio
-                      </h3>
-                      <p className="text-sm text-gray-500">1ª interação</p>
-                    </div>
-                  </div>
-                  <p className="text-2xl font-bold text-white">
-                    {leadsData?.tempo_medio_resposta || "0h 0m"}
-                  </p>
-                </Card>
-
+                
                 <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50 hover:border-gray-600/50 transition-all duration-200">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
