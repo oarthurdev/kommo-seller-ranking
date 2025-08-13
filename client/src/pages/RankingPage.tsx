@@ -15,6 +15,7 @@ import {
 import { useIsTVScreen, useScreenType } from "@/hooks/use-mobile";
 import { MonthFilter, type MonthFilterData } from "@/components/ui/MonthFilter";
 import { useBranding } from "@/lib/brandingContext";
+import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 import { useSaleAlerts } from "@/hooks/useSaleAlerts";
 import { Toaster } from "@/components/ui/toaster";
 import { TVSimulator } from "@/components/ui/TVSimulator";
@@ -60,6 +61,7 @@ export function RankingPage() {
     year: currentDate.getFullYear(),
   });
   const { branding } = useBranding();
+  const { setGlobalFilter } = useUnifiedFilter();
 
   // Sale alerts
   useSaleAlerts();
@@ -128,8 +130,17 @@ export function RankingPage() {
 
   const isLoading = isLoadingBrokers || isLoadingMetrics;
 
-  const handleFilterChange = (filter: MonthFilterData) => {
+  const handleFilterChange = async (filter: MonthFilterData) => {
     setCurrentFilter(filter);
+    
+    // Convert MonthFilterData to UnifiedFilterData and set as global filter
+    const unifiedFilter = {
+      filter_type: "month_year",
+      month: filter.month,
+      year: filter.year,
+    };
+    
+    await setGlobalFilter(unifiedFilter);
     // Data will be automatically refetched due to query key change
   };
 

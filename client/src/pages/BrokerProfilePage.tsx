@@ -643,8 +643,14 @@ export function BrokerProfilePage() {
                     </div>
                     <PeriodFilter
                       componentName="lost_leads_funnel"
-                      onFilterChange={(filter) => {
+                      onFilterChange={async (filter) => {
                         setLostLeadsFilter(filter);
+                        // Save component filter
+                        await updateComponentFilter("lost_leads_funnel", {
+                          filter_type: filter.filter_type,
+                          start_date: filter.start_date,
+                          end_date: filter.end_date,
+                        });
                         // Invalidate related queries immediately
                         queryClient.invalidateQueries({
                           queryKey: ["brokerLostLeads", brokerId],
@@ -673,8 +679,14 @@ export function BrokerProfilePage() {
                     </div>
                     <PeriodFilter
                       componentName="lost_leads_funnel"
-                      onFilterChange={(filter) => {
+                      onFilterChange={async (filter) => {
                         setLostLeadsFilter(filter);
+                        // Save component filter
+                        await updateComponentFilter("lost_leads_funnel", {
+                          filter_type: filter.filter_type,
+                          start_date: filter.start_date,
+                          end_date: filter.end_date,
+                        });
                         // Invalidate related queries immediately
                         queryClient.invalidateQueries({
                           queryKey: ["brokerLostLeads", brokerId],
@@ -701,8 +713,14 @@ export function BrokerProfilePage() {
                     </div>
                     <PeriodFilter
                       componentName="lost_leads_funnel"
-                      onFilterChange={(filter) => {
+                      onFilterChange={async (filter) => {
                         setLostLeadsFilter(filter);
+                        // Save component filter
+                        await updateComponentFilter("lost_leads_funnel", {
+                          filter_type: filter.filter_type,
+                          start_date: filter.start_date,
+                          end_date: filter.end_date,
+                        });
                         // Invalidate related queries immediately
                         queryClient.invalidateQueries({
                           queryKey: ["brokerLostLeads", brokerId],

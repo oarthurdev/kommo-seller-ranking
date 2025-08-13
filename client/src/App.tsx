@@ -10,6 +10,7 @@ import { Route, Switch, useLocation } from "wouter";
 import { queryClient } from "@/lib/queryClient";
 import { BrandingProvider } from "@/lib/brandingContext";
 import { CompanyProvider } from "@/lib/companyContext";
+import { UnifiedFilterProvider } from "@/lib/unifiedFilterContext";
 import React, { useState, useEffect, useCallback } from "react";
 import { ROTATION_INTERVAL } from "@/lib/constants";
 
@@ -142,22 +143,24 @@ function AppContent() {
   return (
     <CompanyProvider>
       <BrandingProvider>
-        <div className="bg-background min-h-screen">
-          {/* <PageTransition> */}
-          <AutoRotation />
-          <Switch>
-            <Route path="/ranking" component={RankingPage} />
-            <Route path="/ranking/broker/:id" component={BrokerProfilePage} />
-            <Route
-              path="/ranking/retrospective"
-              component={MonthlyRetrospectivePage}
-            />
-            <Route path="/ranking/filters" component={FilterConfigPage} />
-            <Route component={NotFound} />
-          </Switch>
-          {/* </PageTransition> */}
-          <Toaster />
-        </div>
+        <UnifiedFilterProvider>
+          <div className="bg-background min-h-screen">
+            {/* <PageTransition> */}
+            <AutoRotation />
+            <Switch>
+              <Route path="/ranking" component={RankingPage} />
+              <Route path="/ranking/broker/:id" component={BrokerProfilePage} />
+              <Route
+                path="/ranking/retrospective"
+                component={MonthlyRetrospectivePage}
+              />
+              <Route path="/ranking/filters" component={FilterConfigPage} />
+              <Route component={NotFound} />
+            </Switch>
+            {/* </PageTransition> */}
+            <Toaster />
+          </div>
+        </UnifiedFilterProvider>
       </BrandingProvider>
     </CompanyProvider>
   );

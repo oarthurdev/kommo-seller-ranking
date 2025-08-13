@@ -15,6 +15,8 @@ interface UnifiedFilterContextType {
   setGlobalFilter: (filter: UnifiedFilterData) => void;
   updateComponentFilter: (componentName: string, filter: UnifiedFilterData) => Promise<void>;
   getComponentFilter: (componentName: string) => Promise<UnifiedFilterData | null>;
+  getGlobalFilter: () => UnifiedFilterData;
+  propagateGlobalFilterToComponents: () => Promise<void>;
 }
 
 const UnifiedFilterContext = createContext<UnifiedFilterContextType | null>(null);
@@ -36,12 +38,19 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
         );
         if (response.ok) {
           const filter = await response.json();
-          if (filter && filter.month && filter.year) {
-            setCurrentFilter({
-              filter_type: "month_year",
-              month: filter.month,
-              year: filter.year,
-            });
+          if (filter && (filter.month || filter.filter_type)) {
+            const globalFilter = filter.filter_type === "month_year" && filter.month && filter.year
+              ? {
+                  filter_type: "month_year",
+                  month: filter.month,
+                  year: filter.year,
+                }
+              : {
+                  filter_type: filter.filter_type || "current_month",
+                  start_date: filter.start_date,
+                  end_date: filter.end_date,
+                };
+            setCurrentFilter(globalFilter);
           }
         }
       } catch (error) {
@@ -55,19 +64,25 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
   const setGlobalFilter = useCallback(async (filter: UnifiedFilterData) => {
     setCurrentFilter(filter);
     
-    // Update all component filters to follow the global filter
-    const components = [
-      "ranking_metrics",
+    // Update ranking_metrics filter (global filter)
+    await updateComponentFilter("ranking_metrics", filter);
+    
+    // Propagate to all broker page components
+    await propagateGlobalFilterToComponents();
+  }, []);
+
+  const propagateGlobalFilterToComponents = useCallback(async () => {
+    const brokerComponents = [
       "broker_performance_metrics", 
       "broker_heatmap",
       "sales_funnel",
       "lost_leads_funnel"
     ];
 
-    for (const componentName of components) {
-      await updateComponentFilter(componentName, filter);
+    for (const componentName of brokerComponents) {
+      await updateComponentFilter(componentName, currentFilter);
     }
-  }, []);
+  }, [currentFilter]);
 
   const updateComponentFilter = useCallback(async (componentName: string, filter: UnifiedFilterData) => {
     try {
@@ -101,6 +116,10 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
     return null;
   }, []);
 
+  const getGlobalFilter = useCallback(() => {
+    return currentFilter;
+  }, [currentFilter]);
+
   return (
     <UnifiedFilterContext.Provider
       value={{
@@ -108,6 +127,8 @@ export function UnifiedFilterProvider({ children }: { children: React.ReactNode 
         setGlobalFilter,
         updateComponentFilter,
         getComponentFilter,
+        getGlobalFilter,
+        propagateGlobalFilterToComponents,
       }}
     >
       {children}
