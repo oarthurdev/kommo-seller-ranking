@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { useQuery, useQueries } from "@tanstack/react-query";
+import { useQuery, useQueries, useQueryClient } from "@tanstack/react-query";
 import { BrokerCard } from "@/components/dashboard/BrokerCard";
 import { MetricSummaryCards } from "@/components/dashboard/MetricSummaryCards";
 import { getBrokerRankings, getBrokerLeads } from "@/lib/api";
@@ -56,15 +56,33 @@ export function RankingPage() {
   const isTVScreen = useIsTVScreen();
   const screenType = useScreenType();
   const currentDate = new Date();
-  const [currentFilter, setCurrentFilter] = useState<MonthFilterData>({
-    month: currentDate.getMonth() + 1,
-    year: currentDate.getFullYear(),
-  });
   const { branding } = useBranding();
-  const { setGlobalFilter } = useUnifiedFilter();
+  const { currentFilter, isHydrated } = useUnifiedFilter();
 
   // Sale alerts
   useSaleAlerts();
+
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    if (isHydrated) {
+      queryClient.invalidateQueries({ queryKey: ["rankings"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
+      // ... invalide outras se necessário
+    }
+  }, [isHydrated, queryClient]);
+
+  const buildParamsFromFilter = (f: typeof currentFilter) => {
+    const p = new URLSearchParams();
+    p.append("filterType", f.filter_type);
+    if (f.filter_type === "month") {
+      if (typeof f.month === "number") p.append("month", String(f.month));
+      if (typeof f.year === "number") p.append("year", String(f.year));
+    } else {
+      if (f.start_date) p.append("startDate", f.start_date);
+      if (f.end_date) p.append("endDate", f.end_date);
+    }
+    return p;
+  };
 
   type Lead = Awaited<ReturnType<typeof getBrokerLeads>>[number];
 
@@ -73,9 +91,16 @@ export function RankingPage() {
     isLoading: isLoadingBrokers,
     refetch: refetchBrokers,
   } = useQuery<Broker[]>({
-    queryKey: ["brokerRankings", currentFilter.month, currentFilter.year],
+    queryKey: [
+      "rankings",
+      currentFilter.filter_type,
+      currentFilter.month,
+      currentFilter.year,
+      currentFilter.start_date,
+      currentFilter.end_date,
+    ],
     queryFn: async () => {
-      const params = new URLSearchParams();
+      const params = buildParamsFromFilter(currentFilter);
 
       if (currentFilter.month && currentFilter.year) {
         params.append("month", currentFilter.month.toString());
@@ -92,6 +117,7 @@ export function RankingPage() {
 
       return await res.json();
     },
+    enabled: isHydrated,
   });
 
   const {
@@ -99,11 +125,21 @@ export function RankingPage() {
     isLoading: isLoadingMetrics,
     refetch: refetchMetrics,
   } = useQuery({
-    queryKey: ["dashboardMetrics", currentFilter.month, currentFilter.year],
+    queryKey: [
+      "dashboardMetrics",
+      currentFilter.filter_type,
+      currentFilter.month,
+      currentFilter.year,
+      currentFilter.start_date,
+      currentFilter.end_date,
+    ],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      params.append("month", currentFilter.month.toString());
-      params.append("year", currentFilter.year.toString());
+      const params = buildParamsFromFilter(currentFilter);
+
+      if (currentFilter.month && currentFilter.year) {
+        params.append("month", currentFilter.month.toString());
+        params.append("year", currentFilter.year.toString());
+      }
 
       const url = `/api/dashboard/metrics?${params.toString()}`;
       console.log("Fetching dashboard metrics from:", url);
@@ -130,18 +166,11 @@ export function RankingPage() {
 
   const isLoading = isLoadingBrokers || isLoadingMetrics;
 
-  const handleFilterChange = async (filter: MonthFilterData) => {
-    setCurrentFilter(filter);
-    
-    // Convert MonthFilterData to UnifiedFilterData and set as global filter
-    const unifiedFilter = {
-      filter_type: "month",
-      month: filter.month,
-      year: filter.year,
-    };
-    
-    await setGlobalFilter(unifiedFilter);
-    // Data will be automatically refetched due to query key change
+  const handleFilterChange = async (_filter: MonthFilterData) => {
+    // nada de setCurrentFilter, nada de setGlobalFilter aqui
+    queryClient.invalidateQueries({ queryKey: ["rankings"] });
+    queryClient.invalidateQueries({ queryKey: ["dashboardMetrics"] });
+    // invalide outras queries da página se precisar
   };
 
   // Removed automatic refetch interval to prevent unnecessary API calls

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Select,
   SelectContent,
@@ -35,52 +35,74 @@ const months = [
   { value: 12, label: "Dezembro" },
 ];
 
+const CURRENT_YEAR = new Date().getFullYear();
+// quantos anos pra trás você quer mostrar no seletor
+const YEAR_RANGE = 2;
+
+const years = Array.from(
+  { length: YEAR_RANGE + 1 },
+  (_, i) => CURRENT_YEAR - i,
+);
+
 export function MonthFilter({
   componentName,
   onFilterChange,
   compact = false,
   className = "",
 }: MonthFilterProps) {
-  const { currentFilter, setGlobalFilter, updateComponentFilter } =
-    useUnifiedFilter();
-  const [selectedMonth, setSelectedMonth] = useState(
-    currentFilter.month || new Date().getMonth() + 1,
+  const { currentFilter, setGlobalFilter, isHydrated } = useUnifiedFilter();
+
+  const [selectedMonth, setSelectedMonth] = useState<number>(
+    new Date().getMonth() + 1,
   );
-  const [selectedYear, setSelectedYear] = useState(
-    currentFilter.year || new Date().getFullYear(),
+  const [selectedYear, setSelectedYear] = useState<number>(
+    new Date().getFullYear(),
   );
 
-  // Generate years (current year + 2 previous years)
-  const currentDate = new Date();
-  const years = [];
-  for (let i = 2; i >= 0; i--) {
-    years.push(currentDate.getFullYear() - i);
-  }
+  // 👇 impede notificar no primeiro sync (montagem)
+  const didInitRef = useRef(false);
 
-  // Sync with global filter
+  // Sync visual com o global, mas sem salvar nem notificar no mount
   useEffect(() => {
-    if (currentFilter.month && currentFilter.year) {
+    if (!isHydrated) return;
+
+    // Atualiza os selects a partir do global persistido
+    if (
+      currentFilter.filter_type === "month" &&
+      currentFilter.month &&
+      currentFilter.year
+    ) {
       setSelectedMonth(currentFilter.month);
       setSelectedYear(currentFilter.year);
-      onFilterChange({ month: currentFilter.month, year: currentFilter.year });
     }
-  }, [currentFilter.month, currentFilter.year]);
 
-  const handleFilterChange = async (month: number, year: number) => {
+    // Primeira hidratação: apenas refletir UI, sem disparar nada
+    if (!didInitRef.current) {
+      didInitRef.current = true;
+      return;
+    }
+
+    // Mudanças futuras do global (gatilho externo) podem refletir na UI
+    // mas não chamamos onFilterChange aqui para não re-salvar sem ação do usuário
+  }, [
+    isHydrated,
+    currentFilter.filter_type,
+    currentFilter.month,
+    currentFilter.year,
+  ]);
+
+  // ÚNICO ponto que salva/propaga: ação do usuário
+  const handleFilterChange = (month: number, year: number) => {
     setSelectedMonth(month);
     setSelectedYear(year);
 
-    const filterData = {
-      filter_type: "month",
-      month,
-      year,
-    };
+    const next = { filter_type: "month", month, year };
 
-    // Update global filter (this will propagate to all components)
-    setGlobalFilter(filterData);
+    // Isso já salva `ranking_metrics` no backend e propaga para os componentes
+    setGlobalFilter(next);
 
-    // Notify parent component
-    onFilterChange({ month, year });
+    // O pai pode usar esse callback apenas para invalidar queries locais, se quiser
+    onFilterChange?.({ month, year });
   };
 
   return (

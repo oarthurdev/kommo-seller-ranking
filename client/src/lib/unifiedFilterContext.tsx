@@ -29,6 +29,8 @@ interface UnifiedFilterContextType {
   propagateGlobalFilterToComponents: (
     baseFilter?: UnifiedFilterData,
   ) => Promise<void>;
+  // 👇
+  isHydrated: boolean;
 }
 
 const UnifiedFilterContext = createContext<UnifiedFilterContextType | null>(
@@ -40,22 +42,25 @@ export function UnifiedFilterProvider({
 }: {
   children: React.ReactNode;
 }) {
-  const currentDate = new Date();
+  const now = new Date();
+
+  // Valor default NÃO deve causar salvamento; é só placeholder visual
   const [currentFilter, setCurrentFilter] = useState<UnifiedFilterData>({
     filter_type: "month",
-    month: currentDate.getMonth() + 1,
-    year: currentDate.getFullYear(),
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
   });
 
-  // Load initial filter from ranking component
+  const [isHydrated, setIsHydrated] = useState(false);
+
   useEffect(() => {
     const loadInitialFilter = async () => {
       try {
-        const response = await fetch(
+        const res = await fetch(
           getServerBaseUrl() + `/api/component-filters/ranking_metrics`,
         );
-        if (response.ok) {
-          const filter = await response.json();
+        if (res.ok) {
+          const filter = await res.json();
           if (filter && (filter.month || filter.filter_type)) {
             const globalFilter: UnifiedFilterData =
               filter.filter_type === "month" && filter.month && filter.year
@@ -72,11 +77,13 @@ export function UnifiedFilterProvider({
             setCurrentFilter(globalFilter);
           }
         }
-      } catch (error) {
-        console.error("Erro ao carregar filtro inicial:", error);
+      } catch (e) {
+        console.error("Erro ao carregar filtro inicial:", e);
+      } finally {
+        // ✅ SINALIZA que o valor inicial (persistido) já foi considerado
+        setIsHydrated(true);
       }
     };
-
     loadInitialFilter();
   }, []);
 
@@ -87,9 +94,9 @@ export function UnifiedFilterProvider({
   const updateComponentFilter = useCallback(
     async (componentName: string, filter: UnifiedFilterData) => {
       try {
-        const monthToSend =
+        const resolvedMonth =
           typeof filter.month === "number" ? filter.month : currentFilter.month;
-        const yearToSend =
+        const resolvedYear =
           typeof filter.year === "number" ? filter.year : currentFilter.year;
 
         await fetch(
@@ -100,8 +107,8 @@ export function UnifiedFilterProvider({
             body: JSON.stringify({
               component_name: componentName,
               ...filter,
-              month: monthToSend,
-              year: yearToSend,
+              month: resolvedMonth,
+              year: resolvedYear,
             }),
           },
         );
@@ -195,6 +202,8 @@ export function UnifiedFilterProvider({
         getComponentFilter,
         getGlobalFilter,
         propagateGlobalFilterToComponents,
+        // 👇 expõe para os componentes
+        isHydrated,
       }}
     >
       {children}

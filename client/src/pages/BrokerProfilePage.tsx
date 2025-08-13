@@ -41,8 +41,7 @@ export function BrokerProfilePage() {
   const queryClient = useQueryClient();
 
   // Pega o globalFilter reativo
-  const { currentFilter: globalFilter, updateComponentFilter } =
-    useUnifiedFilter();
+  const { currentFilter: globalFilter, isHydrated } = useUnifiedFilter();
 
   // Overrides locais (só existem quando o usuário mexe no filtro do componente)
   const [metricsFilterOverride, setMetricsFilterOverride] =
@@ -138,7 +137,7 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar corretor");
       return await res.json();
     },
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   useEffect(() => {
@@ -166,14 +165,14 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar pontos do corretor");
       return await res.json();
     },
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   const { data: rankPosition } = useQuery<RankPosition>({
     queryKey: ["brokerRankPosition", brokerId],
     queryFn: async () =>
       await import("@/lib/api").then((m) => m.getBrokerRankPosition(brokerId)),
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   // --------- Leads com ticket ----------
@@ -195,7 +194,7 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar leads do corretor");
       return await res.json();
     },
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   // --------- Pipeline config ----------
@@ -232,7 +231,7 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar etapas do corretor");
       return await res.json();
     },
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   // --------- Heatmap ----------
@@ -251,7 +250,7 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar heatmap");
       return await res.json();
     },
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   // --------- Lost Leads ----------
@@ -276,7 +275,7 @@ export function BrokerProfilePage() {
       if (!res.ok) throw new Error("Erro ao buscar leads perdidos");
       return await res.json();
     },
-    enabled: !!brokerId && !isNaN(brokerId),
+    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
     staleTime: 5 * 60 * 1000,
     retry: 2,
   });
@@ -299,7 +298,7 @@ export function BrokerProfilePage() {
         if (!res.ok) throw new Error("Erro ao buscar performance semanal");
         return await res.json();
       },
-      enabled: !!brokerId && !isNaN(brokerId),
+      enabled: isHydrated && !!brokerId && !isNaN(brokerId),
     });
 
   // --------- Inatividade (não depende de filtro) ----------
@@ -567,7 +566,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.total_leads || 0}
+                    {weeklyPerformanceData?.leads_captados || 0}
                   </p>
                 </Card>
 
