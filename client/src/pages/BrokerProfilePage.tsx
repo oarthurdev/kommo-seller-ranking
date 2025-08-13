@@ -510,7 +510,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.leads_perdidos || 0}
+                    {weeklyPerformanceData?.oportunidades_perdidas || 0}
                   </p>
                 </Card>
 
