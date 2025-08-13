@@ -14,7 +14,7 @@ interface HeatMapProps {
   };
   titulo?: string;
   componentName?: string;
-  onFilterChange?: (filter: PeriodFilterData) => void;
+  onFilterChange?: (filter: PeriodFilterData) => Promise<void>;
   showFilter?: boolean;
 }
 
@@ -30,17 +30,16 @@ export function HeatMap({
     filter_type: "current_month",
   });
 
-  const handleFilterChange = (filter: PeriodFilterData) => {
+  const handleFilterChange = async (filter: PeriodFilterData) => {
     setCurrentFilter(filter);
-
-    // Invalidar queries relacionadas ao heatmap
-    queryClient.invalidateQueries({ queryKey: ["brokerHeatmap"] });
-    queryClient.invalidateQueries({ queryKey: ["activityHeatmap"] });
-    queryClient.invalidateQueries({ queryKey: ["weeklyActivityHeatmap"] });
-
-    // Notificar componente pai se callback foi fornecido
     if (onFilterChange) {
-      onFilterChange(filter);
+      await onFilterChange(filter);
+    }
+
+    if (componentName) {
+      queryClient.invalidateQueries({
+        queryKey: ["brokerHeatmap", componentName, filter]
+      });
     }
   };
   // Verificar se os dados existem e têm o formato correto

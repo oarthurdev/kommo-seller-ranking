@@ -28,6 +28,7 @@ import {
 import { Card } from "@/components/ui/card";
 import { TrendingUp, Clock, BarChart3 } from "lucide-react";
 import { useBranding } from "@/lib/brandingContext";
+import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 import { getServerBaseUrl } from "@/lib/utils";
 
 // Add branding context usage
@@ -37,6 +38,7 @@ export function BrokerProfilePage() {
   const [, navigate] = useLocation();
   const { branding } = useBranding();
   const queryClient = useQueryClient();
+  const { updateComponentFilter } = useUnifiedFilter();
 
   // Estados para filtros dos componentes
   const [metricsFilter, setMetricsFilter] = useState<PeriodFilterData>({
@@ -100,10 +102,18 @@ export function BrokerProfilePage() {
   }, [broker, error, navigate]);
 
   const { data: brokerPoints } = useQuery<BrokerPoints>({
-    queryKey: ["brokerPoints", brokerId, "ranking_metrics"],
+    queryKey: ["brokerPoints", brokerId, metricsFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.append("filterType", "ranking_metrics");
+      if (metricsFilter.filter_type) {
+        params.append("filterType", metricsFilter.filter_type);
+      }
+      if (metricsFilter.start_date) {
+        params.append("startDate", metricsFilter.start_date);
+      }
+      if (metricsFilter.end_date) {
+        params.append("endDate", metricsFilter.end_date);
+      }
       // Add parameter to include all pipelines
       params.append("allPipelines", "true");
 
@@ -133,10 +143,18 @@ export function BrokerProfilePage() {
     vendas_fechadas: number;
     vgv_mes: number;
   }>({
-    queryKey: ["brokerLeadsWithTicket", brokerId, "ranking_metrics"],
+    queryKey: ["brokerLeadsWithTicket", brokerId, metricsFilter],
     queryFn: async () => {
       const params = new URLSearchParams();
-      params.append("filterType", "ranking_metrics");
+      if (metricsFilter.filter_type) {
+        params.append("filterType", metricsFilter.filter_type);
+      }
+      if (metricsFilter.start_date) {
+        params.append("startDate", metricsFilter.start_date);
+      }
+      if (metricsFilter.end_date) {
+        params.append("endDate", metricsFilter.end_date);
+      }
       // Add parameter to include all pipelines
       params.append("allPipelines", "true");
 
@@ -260,10 +278,18 @@ export function BrokerProfilePage() {
 
   const { data: weeklyPerformance, isLoading: isLoadingWeeklyPerformance } =
     useQuery({
-      queryKey: ["brokerWeeklyPerformance", brokerId, "ranking_metrics"],
+      queryKey: ["brokerWeeklyPerformance", brokerId, metricsFilter],
       queryFn: async () => {
         const params = new URLSearchParams();
-        params.append("filterType", "ranking_metrics");
+        if (metricsFilter.filter_type) {
+          params.append("filterType", metricsFilter.filter_type);
+        }
+        if (metricsFilter.start_date) {
+          params.append("startDate", metricsFilter.start_date);
+        }
+        if (metricsFilter.end_date) {
+          params.append("endDate", metricsFilter.end_date);
+        }
 
         const res = await fetch(
           getServerBaseUrl() +
@@ -434,6 +460,29 @@ export function BrokerProfilePage() {
                     Métricas de Performance
                   </h2>
                 </div>
+                <PeriodFilter
+                  componentName="broker_performance_metrics"
+                  onFilterChange={async (filter) => {
+                    setMetricsFilter(filter);
+                    // Save component filter
+                    await updateComponentFilter("broker_performance_metrics", {
+                      filter_type: filter.filter_type,
+                      start_date: filter.start_date,
+                      end_date: filter.end_date,
+                    });
+                    // Invalidate related queries immediately
+                    queryClient.invalidateQueries({
+                      queryKey: ["brokerPoints", brokerId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["brokerLeadsWithTicket", brokerId],
+                    });
+                    queryClient.invalidateQueries({
+                      queryKey: ["brokerWeeklyPerformance", brokerId],
+                    });
+                  }}
+                  compact={true}
+                />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-2 2xl:grid-cols-3 gap-4">
@@ -615,8 +664,14 @@ export function BrokerProfilePage() {
                 </div>
                 <PeriodFilter
                   componentName="sales_funnel"
-                  onFilterChange={(filter) => {
+                  onFilterChange={async (filter) => {
                     setSalesFunnelFilter(filter);
+                    // Save component filter
+                    await updateComponentFilter("sales_funnel", {
+                      filter_type: filter.filter_type,
+                      start_date: filter.start_date,
+                      end_date: filter.end_date,
+                    });
                     // Invalidate related queries immediately
                     queryClient.invalidateQueries({
                       queryKey: ["brokerLeadsEtapasCount", brokerId],
@@ -743,7 +798,19 @@ export function BrokerProfilePage() {
                   <HeatMap
                     dados={heatMap}
                     componentName="broker_heatmap"
-                    onFilterChange={setHeatmapFilter}
+                    onFilterChange={async (filter) => {
+                      setHeatmapFilter(filter);
+                      // Save component filter
+                      await updateComponentFilter("broker_heatmap", {
+                        filter_type: filter.filter_type,
+                        start_date: filter.start_date,
+                        end_date: filter.end_date,
+                      });
+                      // Invalidate related queries immediately
+                      queryClient.invalidateQueries({
+                        queryKey: ["brokerHeatmap", brokerId],
+                      });
+                    }}
                     showFilter={true}
                   />
                 ) : (
