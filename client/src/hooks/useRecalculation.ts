@@ -20,9 +20,9 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
   const [isRecalculating, setIsRecalculating] = useState(false);
   const [progress, setProgress] = useState(0);
 
-  const checkBrokerPointsStatus = async (companyId: string): Promise<BrokerPointsStatus> => {
+  const checkBrokerPointsStatus = async (): Promise<BrokerPointsStatus> => {
     try {
-      const response = await fetch(`https://sync.imobiliario.tec.br/broker-points-status/${companyId}`);
+      const response = await fetch('/api/broker-points-status');
       if (!response.ok) {
         throw new Error('Failed to check broker points status');
       }
@@ -37,10 +37,6 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
     setIsRecalculating(true);
     setProgress(0);
 
-    // Get company ID from the current context (assuming it's available globally)
-    // This should match the company ID used in the middleware
-    const companyId = "4f114478-6405-4971-9344-01f647c6edb8";
-
     try {
       // Poll the status endpoint until calculation is finished
       const pollInterval = 1000; // Check every second
@@ -48,7 +44,7 @@ export function useRecalculation(): RecalculationState & RecalculationActions {
       const startTime = Date.now();
 
       const poll = async (): Promise<void> => {
-        const status = await checkBrokerPointsStatus(companyId);
+        const status = await checkBrokerPointsStatus();
         
         if (status.status === 'finished') {
           setProgress(100);

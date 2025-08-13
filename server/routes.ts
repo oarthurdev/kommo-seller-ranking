@@ -984,6 +984,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     return getRecentSales(req, res);
   });
 
+  // Broker points status proxy endpoint
+  app.get("/api/broker-points-status", async (req, res) => {
+    try {
+      const companyId = (req as any).companyId;
+      
+      if (!companyId) {
+        return res.status(400).json({ error: "Company ID required" });
+      }
+
+      const response = await fetch(`https://sync.imobiliario.tec.br/broker-points-status/${companyId}`);
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      res.json(data);
+    } catch (error) {
+      console.error("Error fetching broker points status:", error);
+      res.status(500).json({ 
+        status: 'error',
+        message: 'Failed to fetch broker points status' 
+      });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }
