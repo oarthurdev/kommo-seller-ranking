@@ -561,9 +561,9 @@ export function BrokerProfilePage() {
                     </div>
                     <div>
                       <h3 className="text-sm font-medium text-gray-400">
-                        Angariações
+                        Leads
                       </h3>
-                      <p className="text-sm text-gray-500">leads captados</p>
+                      <p className="text-sm text-gray-500">recebidos</p>
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
