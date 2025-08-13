@@ -642,34 +642,62 @@ export function BrokerProfilePage() {
 
             {/* Funil de Leads Perdidos */}
             <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50">
-              {/* ...manteve sua lógica de loading/erro... */}
-              <div>
-                <div className="flex items-center justify-between mb-6">
-                  <div className="flex items-center gap-2">
-                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
-                    <h3 className="text-xl font-semibold text-white">
-                      Funil de Leads Perdidos
-                    </h3>
+              {isLoadingLostLeads ? (
+                <div className="animate-pulse">
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="h-6 bg-gray-700 rounded w-1/3"></div>
+                    <div className="h-8 bg-gray-700 rounded w-20"></div>
                   </div>
-                  <PeriodFilter
-                    componentName="lost_leads_funnel"
-                    onFilterChange={async (filter) => {
-                      setLostLeadsFilterOverride(filter);
-                      queryClient.invalidateQueries({
-                        queryKey: ["brokerPoints", brokerId],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["brokerLeadsWithTicket", brokerId],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["brokerWeeklyPerformance", brokerId],
-                      });
-                    }}
-                    compact={true}
-                  />
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="h-16 bg-gray-700 rounded"></div>
+                    ))}
+                  </div>
                 </div>
-                <LostLeadsFunnel lostLeads={lostLeadsData || {}} />
-              </div>
+              ) : lostLeadsError ? (
+                <div className="text-center py-8">
+                  <div className="text-red-400 mb-2">❌</div>
+                  <p className="text-gray-400">Erro ao carregar leads perdidos</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {lostLeadsError.message}
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center justify-between mb-6">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
+                        <Ban className="w-5 h-5 text-red-400" />
+                      </div>
+                      <div>
+                        <h3 className="text-xl font-semibold text-white">
+                          Análise de Leads Perdidos
+                        </h3>
+                        <p className="text-sm text-gray-400">
+                          Identificação de gargalos no funil de vendas
+                        </p>
+                      </div>
+                    </div>
+                    <PeriodFilter
+                      componentName="lost_leads_funnel"
+                      onFilterChange={async (filter) => {
+                        setLostLeadsFilterOverride(filter);
+                        queryClient.invalidateQueries({
+                          queryKey: ["brokerPoints", brokerId],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ["brokerLeadsWithTicket", brokerId],
+                        });
+                        queryClient.invalidateQueries({
+                          queryKey: ["brokerWeeklyPerformance", brokerId],
+                        });
+                      }}
+                      compact={true}
+                    />
+                  </div>
+                  <LostLeadsFunnel lostLeads={lostLeadsData || {}} />
+                </div>
+              )}
             </Card>
           </div>
 

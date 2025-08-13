@@ -41,54 +41,72 @@ export function LostLeadsFunnel({ lostLeads }: LostLeadsFunnelProps) {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-6">
+      {/* Header com totais em destaque */}
+      <div className="mb-6 p-4 bg-red-900/20 border border-red-800/30 rounded-lg">
         <div className="text-center">
-          <p className="text-sm text-gray-400">
-            Total:{" "}
-            <span className="text-red-400 font-semibold text-lg">
-              {totalLostLeads}
-            </span>{" "}
-            leads perdidos
+          <p className="text-red-400 font-bold text-2xl mb-1">
+            {totalLostLeads}
+          </p>
+          <p className="text-gray-300 text-sm">
+            Total de leads perdidos no período
           </p>
         </div>
       </div>
 
-      <div className="space-y-4">
+      {/* Lista detalhada por etapa */}
+      <div className="space-y-3">
+        <h4 className="text-sm font-semibold text-gray-300 mb-3 border-b border-gray-700 pb-2">
+          📊 Detalhamento por Etapa
+        </h4>
+        
         {stages.map((stage, index) => {
           const widthPercent =
             maxCount > 0 ? (stage.count / maxCount) * 100 : 0;
           const percentage =
             totalLostLeads > 0 ? (stage.count / totalLostLeads) * 100 : 0;
-          // Usar cor do backend (cada etapa já vem com cor única)
           const stageData = lostLeads[stage.name];
           const color = stageData?.color || "#DC2626";
 
           return (
-            <div key={index} className="relative">
-              <div className="flex justify-between items-center mb-2">
-                <div>
-                  <div className="text-sm font-medium text-card-foreground">
-                    {stage.name}
+            <div key={index} className="bg-gray-900/30 rounded-lg p-3 border border-gray-700/30">
+              {/* Header da etapa */}
+              <div className="flex justify-between items-center mb-3">
+                <div className="flex items-center gap-2">
+                  <div 
+                    className="w-3 h-3 rounded-sm flex-shrink-0" 
+                    style={{ backgroundColor: color }}
+                  />
+                  <div>
+                    <h5 className="text-white font-medium text-sm">
+                      {stage.name}
+                    </h5>
                   </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {percentage.toFixed(1)}%
+                <div className="text-right">
+                  <div className="text-red-400 font-bold text-lg">
+                    {stage.count}
+                  </div>
+                  <div className="text-xs text-gray-400">
+                    {percentage.toFixed(1)}% do total
+                  </div>
                 </div>
               </div>
-              <div
-                className="h-10 rounded-lg transition-all duration-500 flex items-center justify-between px-4 relative shadow-sm"
-                style={{
-                  width: `${widthPercent}%`,
-                  backgroundColor: color,
-                  minWidth: stage.count > 0 ? "80px" : "0",
-                }}
-              >
-                <span className="text-white font-semibold text-sm">
-                  {stage.count} leads
-                </span>
-                <span className="text-white text-xs opacity-90 font-medium">
-                  {percentage.toFixed(1)}%
-                </span>
+
+              {/* Barra visual */}
+              <div className="relative">
+                <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
+                  <div
+                    className="h-2 rounded-full transition-all duration-500"
+                    style={{
+                      width: `${widthPercent}%`,
+                      backgroundColor: color,
+                    }}
+                  />
+                </div>
+                <div className="flex justify-between text-xs text-gray-400">
+                  <span>Leads perdidos nesta etapa</span>
+                  <span>{widthPercent.toFixed(0)}% da etapa com mais perdas</span>
+                </div>
               </div>
             </div>
           );
