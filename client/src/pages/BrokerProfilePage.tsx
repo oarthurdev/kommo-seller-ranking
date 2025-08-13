@@ -474,8 +474,8 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.vgv_periodo
-                      ? `R$ ${((brokerPoints?.vgv_periodo || 0) / 1000).toFixed(0)}k`
+                    {leadsData?.vgv_mes
+                      ? `R$ ${((leadsData?.vgv_mes || 0) / 1000).toFixed(0)}k`
                       : "R$ 0"}
                   </p>
                 </Card>

@@ -440,10 +440,6 @@ export async function getBrokerPoints(
     .eq("id", brokerId)
     .eq("company_id", companyId);
 
-  if (startDate && endDate) {
-    query = query.gte("updated_at", startDate).lte("updated_at", endDate);
-  }
-
   const { data, error } = await query.maybeSingle();
 
   if (error) {
