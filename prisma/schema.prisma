@@ -7,6 +7,7 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+  schemas   = ["cf_companies", "cf_kommo", "public"]
 }
 
 model activities {
@@ -36,9 +37,10 @@ model activities {
   nome_tag             String?    @db.VarChar
   entity_type          String?    @db.VarChar
   entity_id            String?    @db.VarChar
-  brokers              brokers?   @relation(fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_activities_broker")
   companies            companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_activities_company")
   leads                leads?     @relation(fields: [lead_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_activities_lead")
+
+  @@schema("public")
 }
 
 model broker_points {
@@ -54,6 +56,8 @@ model broker_points {
   leads_descartados  Int?       @default(0)
   brokers            brokers    @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bp_broker")
   companies          companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bp_company")
+
+  @@schema("public")
 }
 
 model brokers {
@@ -66,11 +70,13 @@ model brokers {
   updated_at    DateTime?      @default(now()) @db.Timestamp(6)
   active        Boolean?       @default(true)
   company_id    String?        @db.Uuid
-  activities    activities[]
+  password      String?        @db.VarChar
   broker_points broker_points?
   companies     companies?     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_brokers_company")
   leads         leads[]
   sla_metrics   sla_metrics[]
+
+  @@schema("public")
 }
 
 model companies {
@@ -78,6 +84,7 @@ model companies {
   name              String
   subdomain         String              @unique(map: "companies_subdomain_unique")
   created_at        DateTime?           @default(now()) @db.Timestamp(6)
+  kommo_config      kommo_config[]
   activities        activities[]
   broker_points     broker_points[]
   brokers           brokers[]
@@ -86,11 +93,12 @@ model companies {
   component_filters component_filters[]
   custom_rules      custom_rules[]
   dynamic_metrics   dynamic_metrics[]
-  kommo_config      kommo_config[]
   leads             leads[]
   metric_results    metric_results[]
   sla_metrics       sla_metrics[]
   sync_logs         sync_logs[]
+
+  @@schema("cf_companies")
 }
 
 model company_branding {
@@ -107,6 +115,8 @@ model company_branding {
   created_at           DateTime? @default(now()) @db.Timestamp(6)
   updated_at           DateTime? @default(now()) @db.Timestamp(6)
   companies            companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
 }
 
 model company_rules {
@@ -119,6 +129,8 @@ model company_rules {
   updated_at DateTime? @default(now()) @db.Timestamp(6)
   companies  companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "company_rules_company_id_companies_id_fk")
   rules      rules     @relation(fields: [rule_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "company_rules_rule_id_rules_id_fk")
+
+  @@schema("public")
 }
 
 model component_filters {
@@ -136,6 +148,7 @@ model component_filters {
   companies      companies @relation(fields: [company_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_component_company")
 
   @@unique([company_id, component_name], map: "component_filters_company_component_unique")
+  @@schema("public")
 }
 
 model custom_rules {
@@ -149,6 +162,8 @@ model custom_rules {
   created_at  DateTime? @default(now()) @db.Timestamp(6)
   updated_at  DateTime? @default(now()) @db.Timestamp(6)
   companies   companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "custom_rules_company_id_companies_id_fk")
+
+  @@schema("public")
 }
 
 model dynamic_metrics {
@@ -165,6 +180,8 @@ model dynamic_metrics {
   updated_at          DateTime?        @default(now()) @db.Timestamp(6)
   companies           companies        @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   metric_results      metric_results[]
+
+  @@schema("public")
 }
 
 model from_webhook {
@@ -190,6 +207,8 @@ model from_webhook {
   broker_id         String?
   lead_id           String?
   inserted_at       DateTime? @default(now()) @db.Timestamp(6)
+
+  @@schema("public")
 }
 
 model kommo_config {
@@ -212,6 +231,8 @@ model kommo_config {
   token_expires_at DateTime?  @db.Date
   updated_at       DateTime?  @db.Timestamp(6)
   companies        companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_kc_company")
+
+  @@schema("cf_kommo")
 }
 
 model leads {
@@ -232,6 +253,8 @@ model leads {
   activities     activities[]
   brokers        brokers?     @relation(fields: [responsavel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_broker")
   companies      companies?   @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_company")
+
+  @@schema("public")
 }
 
 model metric_results {
@@ -248,6 +271,8 @@ model metric_results {
   updated_at         DateTime?       @default(now()) @db.Timestamp(6)
   companies          companies       @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   dynamic_metrics    dynamic_metrics @relation(fields: [dynamic_metric_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
 }
 
 model rules {
@@ -259,6 +284,8 @@ model rules {
   updated_at    DateTime?       @default(now()) @db.Timestamp(6)
   descricao     String?
   company_rules company_rules[]
+
+  @@schema("public")
 }
 
 model sync_control {
@@ -267,6 +294,8 @@ model sync_control {
   next_sync  DateTime? @db.Timestamptz(6)
   status     String?
   error      String?
+
+  @@schema("public")
 }
 
 model sync_logs {
@@ -276,6 +305,8 @@ model sync_logs {
   type       String
   message    String
   companies  companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "sync_logs_company_id_companies_id_fk")
+
+  @@schema("public")
 }
 
 model weekly_logs {
@@ -286,12 +317,13 @@ model weekly_logs {
   total_leads  Int?
   total_points Int?
   created_at   DateTime? @db.Timestamp(6)
+
+  @@schema("public")
 }
 
-/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
 model sla_metrics {
   id                         Int       @id
-  company_id                 String    @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  company_id                 String    @db.Uuid
   broker_id                  BigInt
   broker_name                String?
   leads_perdidos_inatividade Int?      @default(0)
@@ -303,9 +335,13 @@ model sla_metrics {
   updated_at                 DateTime? @default(now()) @db.Timestamp(6)
   brokers                    brokers   @relation(fields: [broker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   companies                  companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
 }
 
 enum Role {
   USER
   ADMIN
+
+  @@schema("public")
 }
