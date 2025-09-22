@@ -1083,7 +1083,7 @@ export async function getActivityHeatmap(
   companyId: string,
   startDate?: string,
   endDate?: string,
-  allPipelines?: boolean,
+  pipelineFilter?: number[], // Aceita um array de pipeline IDs
 ) {
   try {
     // Buscar configuração do Kommo
@@ -1101,231 +1101,220 @@ export async function getActivityHeatmap(
         horarios: [],
         mensagensRecebidas: [],
         mensagensEnviadas: [],
+        period_info: "Erro ao carregar configuração.",
       };
     }
 
-    // Usar parâmetros fornecidos ou buscar filtro para broker_heatmap
-    let periodStart, periodEnd;
+    // Gerenciar pipelines disponíveis
+    const availablePipelineIds = getPipelineIds(config);
+    let pipelinesToQuery = availablePipelineIds;
+
+    // Se um filtro de pipeline específico foi passado, usá-lo
+    if (pipelineFilter && pipelineFilter.length > 0) {
+      pipelinesToQuery = pipelineFilter;
+    }
+
+    // Obter informações dos pipelines disponíveis
+    const pipelineInfo = getPipelinesInfo(config);
+    const pipelineIdMap = new Map(pipelineInfo.map((p) => [p.id, p]));
+
+    // Determinar o período de análise
+    let periodStart: Date, periodEnd: Date;
 
     if (startDate && endDate) {
-      // Usar datas fornecidas
       periodStart = new Date(startDate);
       periodEnd = new Date(endDate);
+      // Ajustar para início e fim do dia se não forem especificados
+      periodStart.setHours(0, 0, 0, 0);
+      periodEnd.setHours(23, 59, 59, 999);
     } else {
-      // Buscar filtro salvo para broker_heatmap
+      // Buscar filtro salvo para 'broker_heatmap'
       const heatmapFilter = await getComponentFilter(
         companyId,
         "broker_heatmap",
       );
+
+      // Definir o período baseado no filtro selecionado
+      let filterType = heatmapFilter?.filter_type || "current_month";
+      let customStartDate = heatmapFilter?.start_date;
+      let customEndDate = heatmapFilter?.end_date;
+      let selectedMonth = heatmapFilter?.month;
+      let selectedYear = heatmapFilter?.year;
+
+      // Validar se o filtro tipo é um dos novos tipos
+      const validDateRanges = ["7_days", "30_days", "current_week", "current_month", "last_month", "month", "custom_range"];
+      if (!validDateRanges.includes(filterType)) {
+        filterType = "current_month"; // Default para mês atual
+      }
+
       const period = getDateRange(
-        heatmapFilter?.filter_type || "current_month",
-        heatmapFilter?.start_date,
-        heatmapFilter?.end_date,
-        heatmapFilter?.month,
-        heatmapFilter?.year,
+        filterType,
+        customStartDate,
+        customEndDate,
+        selectedMonth,
+        selectedYear,
       );
 
-      if (heatmapFilter && heatmapFilter.filter_type !== "current_week") {
-        periodStart = period.start;
-        periodEnd = period.end;
-      } else {
-        // Obter data/hora atual no fuso GMT-3 (Brasil)
-        const nowUTC = new Date();
-        const nowBrasil = new Date(nowUTC.getTime() - 3 * 60 * 60 * 1000); // GMT-3
-
-        // Calcular início da semana atual (segunda-feira) no fuso GMT-3
-        const dayOfWeek = nowBrasil.getDay(); // 0 = domingo, 1 = segunda, etc
-        const daysFromMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1; // Ajustar para segunda-feira
-
-        // Início da semana atual (segunda-feira às 00:00) no fuso GMT-3
-        const currentWeekStart = new Date(nowBrasil);
-        currentWeekStart.setDate(nowBrasil.getDate() - daysFromMonday);
-        currentWeekStart.setHours(0, 0, 0, 0);
-
-        periodStart = currentWeekStart;
-        periodEnd = nowBrasil;
-      }
+      periodStart = period.start;
+      periodEnd = period.end;
     }
 
-    // Definir dias da semana e horários (apenas dias úteis: Seg-Sex)
-    const diasSemana = ["Seg", "Ter", "Qua", "Qui", "Sex"];
+    // Validar se as datas do período são válidas
+    if (!isValidDate(periodStart) || !isValidDate(periodEnd)) {
+      console.error("Datas de período inválidas:", periodStart, periodEnd);
+      return {
+        dias: [],
+        horarios: [],
+        mensagensRecebidas: [],
+        mensagensEnviadas: [],
+        period_info: "Erro: Período de análise inválido.",
+      };
+    }
+
+    const periodInfo = `Período: ${periodStart.toLocaleDateString("pt-BR")} a ${periodEnd.toLocaleDateString("pt-BR")}`;
+    console.log(
+      `Gerando heatmap para corretor ${brokerId} (Pipelines: ${pipelinesToQuery.join(", ")}), ${periodInfo}`,
+    );
+
+    // Dias da semana (Segunda a Domingo)
+    const diasSemana = ["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"];
+
+    // Horários comerciais com intervalos de 30 minutos (8:00 às 18:00)
     const horarios = [
-      "8:00",
-      "8:30",
-      "9:00",
-      "9:30",
-      "10:00",
-      "10:30",
-      "11:00",
-      "11:30",
-      "12:00", // Manhã (9 slots)
-      "13:30",
-      "14:00",
-      "14:30",
-      "15:00",
-      "15:30",
-      "16:00",
-      "16:30",
-      "17:00",
-      "17:30",
-      "18:00", // Tarde (10 slots)
+      "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
+      "12:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
+      "17:00", "17:30", "18:00",
     ];
 
-    // Inicializar matrizes para 5 dias x 19 horários
-    const mensagensRecebidas = Array(5)
-      .fill(0)
-      .map(() => Array(19).fill(0));
-    const mensagensEnviadas = Array(5)
-      .fill(0)
-      .map(() => Array(19).fill(0));
+    // Inicializar matrizes de dados com zeros - 7 dias x 19 horários
+    const mensagensRecebidasData = Array(7).fill(0).map(() => Array(19).fill(0));
+    const mensagensEnviadasData = Array(7).fill(0).map(() => Array(19).fill(0));
 
-    // Função para obter índice do dia (0-4 para Seg-Sex)
+    // Função para obter o índice do dia (0=Segunda, 6=Domingo)
     const getDayIndex = (date: Date) => {
-      try {
-        // Converter data UTC para GMT-3
-        const dateBrasil = new Date(date.getTime() - 3 * 60 * 60 * 1000);
-        const dayOfWeek = dateBrasil.getDay();
-
-        // Validar se é um dia válido
-        if (isNaN(dayOfWeek)) {
-          return -1;
-        }
-
-        // Converter domingo=0 para -1, segunda=1 para 0, etc.
-        // Apenas dias úteis (Segunda a Sexta)
-        return dayOfWeek >= 1 && dayOfWeek <= 5 ? dayOfWeek - 1 : -1;
-      } catch (error) {
-        console.error("Erro ao calcular índice do dia:", error);
-        return -1;
-      }
+      const day = date.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+      // Mapear para: 0=Segunda, 1=Terça, ..., 5=Sábado, 6=Domingo
+      return day === 0 ? 6 : day - 1;
     };
 
-    // Função para obter índice do horário
+    // Função para obter o índice do horário
     const getTimeIndex = (date: Date) => {
-      try {
-        // Converter data UTC para GMT-3
-        const dateBrasil = new Date(date.getTime() - 3 * 60 * 60 * 1000);
-        const hour = dateBrasil.getHours();
-        const minute = dateBrasil.getMinutes();
+      const hour = date.getHours();
+      const minute = date.getMinutes();
 
-        // Validar se são valores válidos
-        if (isNaN(hour) || isNaN(minute)) {
-          return -1;
-        }
-
-        // Manhã: 8:00-12:00 (slots 0-8)
-        if (hour >= 8 && hour <= 12) {
-          if (hour === 12 && minute > 0) return -1; // Após 12:00 não é horário comercial
-
-          const baseIndex = (hour - 8) * 2; // 8h=0, 9h=2, 10h=4, 11h=6, 12h=8
-
-          if (hour === 12) return 8; // 12:00 exato
-          return baseIndex + (minute >= 30 ? 1 : 0);
-        }
-
-        // Tarde: 13:30-18:00 (slots 9-18)
-        if (hour === 13 && minute >= 30) {
-          return 9; // 13:30
-        }
-
-        if (hour >= 14 && hour <= 18) {
-          if (hour === 18 && minute > 0) return -1; // Após 18:00 não é horário comercial
-
-          const baseIndex = 9 + (hour - 13) * 2; // 14h=11, 15h=13, 16h=15, 17h=17, 18h=19
-
-          if (hour === 18) return 18; // 18:00 exato
-          return baseIndex + (minute >= 30 ? 1 : 0);
-        }
-
-        return -1; // Fora do horário comercial
-      } catch (error) {
-        console.error("Erro ao calcular índice do horário:", error);
-        return -1;
+      // Manhã: 8:00-12:00 (slots 0-8)
+      if (hour >= 8 && hour < 12) {
+        const baseIndex = (hour - 8) * 2; // 8h=0, 9h=2, 10h=4, 11h=6
+        return baseIndex + (minute >= 30 ? 1 : 0);
+      } else if (hour === 12 && minute === 0) {
+        return 8; // 12:00
       }
+
+      // Tarde: 13:30-18:00 (slots 9-18)
+      if (hour === 13 && minute >= 30) {
+        return 9; // 13:30
+      } else if (hour > 13 && hour < 18) {
+        const baseIndex = 9 + (hour - 14) * 2; // 14h=11, 15h=13, 16h=15, 17h=17
+        return baseIndex + (minute >= 30 ? 1 : 0);
+      } else if (hour === 18 && minute === 0) {
+        return 18; // 18:00
+      }
+
+      return -1; // Fora do horário comercial ou não mapeado
     };
 
-    // Buscar atividades de mensagens do corretor no período especificado
+    // Buscar mensagens enviadas (from activities)
     const { data: sentActivities, error: sentError } = await supabase
       .from("activities")
-      .select("criado_em, tipo")
+      .select("criado_em, tipo, lead_id") // Incluir lead_id para validação posterior
       .eq("user_id", brokerId)
-      .eq("tipo", "mensagem_enviada")
+      .eq("company_id", companyId)
       .gte("criado_em", periodStart.toISOString())
       .lte("criado_em", periodEnd.toISOString());
+      // .eq("tipo", "mensagem_enviada"); // Considerar outras atividades como mensagens
 
     if (sentError) {
-      console.error(
-        "Erro ao buscar atividades de mensagens enviadas:",
-        sentError,
-      );
+      console.error("Erro ao buscar atividades de mensagens enviadas:", sentError);
     }
 
+    // Buscar mensagens recebidas (from from_webhook)
     const { data: receivedActivities, error: receivedError } = await supabase
       .from("from_webhook")
-      .select("inserted_at")
+      .select("inserted_at, lead_id") // Incluir lead_id para validação posterior
       .eq("broker_id", brokerId)
+      .eq("company_id", companyId)
       .gte("inserted_at", periodStart.toISOString())
       .lte("inserted_at", periodEnd.toISOString());
 
     if (receivedError) {
-      console.error(
-        "Erro ao buscar atividades de mensagens recebidas:",
-        receivedError,
-      );
+      console.error("Erro ao buscar atividades de mensagens recebidas:", receivedError);
     }
+
+    // Filtrar leads do corretor para validação
+    const { data: brokerLeads, error: leadsError } = await supabase
+      .from("leads")
+      .select("id, pipeline_id")
+      .eq("responsavel_id", brokerId)
+      .eq("company_id", companyId)
+      .in("pipeline_id", pipelinesToQuery);
+
+    if (leadsError) {
+      console.error("Erro ao buscar leads do corretor:", leadsError);
+      return {
+        dias: [],
+        horarios: [],
+        mensagensRecebidas: [],
+        mensagensEnviadas: [],
+        period_info: "Erro ao carregar leads do corretor.",
+      };
+    }
+
+    const brokerLeadIds = new Set(brokerLeads?.map(lead => lead.id));
 
     // Processar mensagens enviadas
     sentActivities?.forEach((activity) => {
-      // Converter para horário local (GMT-3)
-      const dateUTC = new Date(activity.criado_em);
-      const dateBrasil = new Date(dateUTC.getTime() - 3 * 60 * 60 * 1000);
+      if (!activity.criado_em) return; // Pular se não houver data
 
-      const dayIndex = getDayIndex(dateBrasil);
-      const timeIndex = getTimeIndex(dateBrasil);
+      // Validar se a mensagem foi enviada para um lead do corretor e dos pipelines corretos
+      if (activity.lead_id && brokerLeadIds.has(activity.lead_id)) {
+        const messageDate = new Date(activity.criado_em);
+        const dayIndex = getDayIndex(messageDate);
+        const timeIndex = getTimeIndex(messageDate);
 
-      if (dayIndex >= 0 && timeIndex >= 0) {
-        mensagensEnviadas[dayIndex][timeIndex]++;
+        if (dayIndex >= 0 && dayIndex < 7 && timeIndex >= 0 && timeIndex < 19) {
+          mensagensEnviadasData[dayIndex][timeIndex]++;
+        }
       }
     });
 
     // Processar mensagens recebidas
     receivedActivities?.forEach((activity) => {
-      // Converter para horário local (GMT-3)
-      const dateUTC = new Date(activity.inserted_at);
-      const dateBrasil = new Date(dateUTC.getTime() - 3 * 60 * 60 * 1000);
+      if (!activity.inserted_at) return; // Pular se não houver data
 
-      const dayIndex = getDayIndex(dateBrasil);
-      const timeIndex = getTimeIndex(dateBrasil);
+      // Validar se a mensagem foi recebida para um lead do corretor e dos pipelines corretos
+      if (activity.lead_id && brokerLeadIds.has(activity.lead_id)) {
+        const messageDate = new Date(activity.inserted_at);
+        const dayIndex = getDayIndex(messageDate);
+        const timeIndex = getTimeIndex(messageDate);
 
-      if (dayIndex >= 0 && timeIndex >= 0) {
-        mensagensRecebidas[dayIndex][timeIndex]++;
+        if (dayIndex >= 0 && dayIndex < 7 && timeIndex >= 0 && timeIndex < 19) {
+          mensagensRecebidasData[dayIndex][timeIndex]++;
+        }
       }
-    });
-
-    // Criar uma versão mais descritiva do período no fuso GMT-3
-    const currentWeekStart = new Date(
-      periodStart.getTime() - 3 * 60 * 60 * 1000,
-    );
-    const nowBrasil = new Date(periodEnd.getTime() - 3 * 60 * 60 * 1000);
-
-    const weekStartFormatted = currentWeekStart.toLocaleDateString("pt-BR");
-    const nowFormatted = nowBrasil.toLocaleDateString("pt-BR");
-    const timeFormatted = nowBrasil.toLocaleTimeString("pt-BR", {
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZone: "UTC", // Já está ajustado para GMT-3
     });
 
     return {
       dias: diasSemana,
       horarios,
-      mensagensRecebidas,
-      mensagensEnviadas,
-      reset_info: `Dados da semana atual em tempo real (${weekStartFormatted} até ${nowFormatted} ${timeFormatted}) - GMT-3`,
+      mensagensRecebidas: mensagensRecebidasData,
+      mensagensEnviadas: mensagensEnviadasData,
+      period_info: periodInfo,
       debug_info: {
         sentActivitiesCount: sentActivities?.length || 0,
         receivedActivitiesCount: receivedActivities?.length || 0,
-        period: `${weekStartFormatted} até ${nowFormatted}`,
+        brokerLeadsCount: brokerLeadIds.size,
+        periodStart: periodStart.toISOString(),
+        periodEnd: periodEnd.toISOString(),
       },
     };
   } catch (error) {
@@ -1335,6 +1324,7 @@ export async function getActivityHeatmap(
       horarios: [],
       mensagensRecebidas: [],
       mensagensEnviadas: [],
+      period_info: "Erro ao gerar heatmap.",
     };
   }
 }
@@ -2527,7 +2517,7 @@ export function getPipelinesInfo(
       pipelineData.pipelines &&
       Array.isArray(pipelineData.pipelines)
     ) {
-      return pipelineData.pipelines
+      return pipelineData
         .map((pipeline: any) => ({
           id: Number(pipeline.id),
           name: pipeline.name || `Pipeline ${pipeline.id}`,
@@ -2777,7 +2767,7 @@ export async function syncKommoMessagesToDatabase(
   }
 }
 
-// Funções auxiliares para análise de dados
+// Funções para análise de dados
 function generateMonthlyData(_activities: any[], _leads: any[]) {
   // Exemplo simplificado - em produção, você usaria datas reais dos dados
   return [
@@ -3550,5 +3540,3 @@ export function getDateRange(
     endFormatted: formatDateForDB(fallbackEnd),
   };
 }
-
-// This line indicates the completion of the code and ensures the correct execution of the javascript code.

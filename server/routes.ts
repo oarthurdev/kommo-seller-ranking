@@ -496,16 +496,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const companyId = (req as any).companyId;
       const brokerId = parseInt(req.params.id);
-      const { filterType, startDate, endDate, allPipelines, month, year } =
-        req.query;
+      const { filterType, startDate, endDate, allPipelines } = req.query;
 
-      const { startFormatted, endFormatted } = getDateRange(
-        filterType as string,
-        startDate as string,
-        endDate as string,
-        month as string,
-        year as string,
-      );
+      let startFormatted, endFormatted;
+
+      if (filterType && filterType !== 'undefined') {
+        const { startFormatted: start, endFormatted: end } = getDateRange(
+          filterType as string,
+          startDate as string,
+          endDate as string,
+        );
+        startFormatted = start;
+        endFormatted = end;
+      }
 
       const heatmap = await getActivityHeatmap(
         brokerId,

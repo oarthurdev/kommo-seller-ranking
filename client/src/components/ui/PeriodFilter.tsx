@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from "react";
 import { Calendar, Clock, Filter } from "lucide-react";
 import {
@@ -167,7 +166,7 @@ export function PeriodFilter({
     if (filterType === "month") {
       return `${currentFilter.month}/${currentFilter.year}`;
     }
-    
+
     const option = FILTER_OPTIONS.find(opt => opt.value === filterType);
     return option?.label || filterType;
   };
@@ -185,10 +184,7 @@ export function PeriodFilter({
           <SelectContent>
             {FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.value === "month" 
-                  ? `${option.label} (${currentFilter.month}/${currentFilter.year})`
-                  : option.label
-                }
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -241,10 +237,7 @@ export function PeriodFilter({
           <SelectContent>
             {FILTER_OPTIONS.map((option) => (
               <SelectItem key={option.value} value={option.value}>
-                {option.value === "month" 
-                  ? `${option.label} (${currentFilter.month}/${currentFilter.year})`
-                  : option.label
-                }
+                {option.label}
               </SelectItem>
             ))}
           </SelectContent>
