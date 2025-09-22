@@ -1133,9 +1133,31 @@ export async function getActivityHeatmap(
     let periodStart: Date, periodEnd: Date;
 
     if (startDate && endDate) {
-      // Para datas fornecidas como string, criar datas GMT-3
-      periodStart = new Date(startDate + "T00:00:00-03:00");
-      periodEnd = new Date(endDate + "T23:59:59-03:00");
+      // Validar e criar datas de forma mais robusta
+      try {
+        // Verificar se as datas são strings válidas no formato YYYY-MM-DD
+        if (typeof startDate === 'string' && typeof endDate === 'string') {
+          // Criar datas locais primeiro (assumindo que já estão em GMT-3)
+          const startLocal = new Date(startDate + "T00:00:00");
+          const endLocal = new Date(endDate + "T23:59:59");
+          
+          // Verificar se as datas são válidas
+          if (isNaN(startLocal.getTime()) || isNaN(endLocal.getTime())) {
+            throw new Error("Datas fornecidas são inválidas");
+          }
+          
+          periodStart = startLocal;
+          periodEnd = endLocal;
+        } else {
+          throw new Error("Datas devem ser strings no formato YYYY-MM-DD");
+        }
+      } catch (error) {
+        console.error("Erro ao processar datas customizadas:", error);
+        // Fallback para mês atual
+        const now = new Date();
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      }
     } else {
       // Buscar filtro salvo para 'broker_heatmap'
       const heatmapFilter = await getComponentFilter(
@@ -1156,7 +1178,7 @@ export async function getActivityHeatmap(
         filterType = "current_month"; // Default para mês atual
       }
 
-      // Usar função de data range padrão em vez da Brazil (que estava causando problemas)
+      // Usar função de data range padrão
       const period = getDateRange(
         filterType,
         customStartDate,
@@ -1165,25 +1187,38 @@ export async function getActivityHeatmap(
         selectedYear,
       );
 
-      // Ajustar datas para GMT-3 após obter o período
-      const nowBrazil = new Date();
-      const offsetMs = 3 * 60 * 60 * 1000; // 3 horas em millisegundos
-
-      periodStart = new Date(period.start.getTime() - offsetMs);
-      periodEnd = new Date(period.end.getTime() - offsetMs);
+      // Verificar se o período retornado é válido
+      if (isValidDate(period.start) && isValidDate(period.end)) {
+        periodStart = period.start;
+        periodEnd = period.end;
+      } else {
+        console.error("Período retornado por getDateRange é inválido:", period);
+        // Fallback para mês atual
+        const now = new Date();
+        periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      }
     }
 
     // Validar se as datas do período são válidas
     if (!isValidDate(periodStart) || !isValidDate(periodEnd)) {
-      console.error("Datas de período inválidas:", periodStart, periodEnd);
+      console.error("Datas de período inválidas:", {
+        periodStart: periodStart?.toString() || 'undefined',
+        periodEnd: periodEnd?.toString() || 'undefined',
+        originalStartDate: startDate,
+        originalEndDate: endDate,
+        filterType: filterType
+      });
+      
       // Usar mês atual como fallback
       const now = new Date();
-      const offsetMs = 3 * 60 * 60 * 1000; // 3 horas GMT-3
       periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      periodStart = new Date(periodStart.getTime() - offsetMs);
       periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      periodEnd = new Date(periodEnd.getTime() - offsetMs);
-      console.log("Usando período fallback:", periodStart.toISOString(), "até", periodEnd.toISOString());
+      
+      console.log("Usando período fallback (mês atual):", {
+        start: periodStart.toISOString(),
+        end: periodEnd.toISOString()
+      });
     }
 
     const periodInfo = `Período: ${periodStart.toLocaleDateString("pt-BR")} a ${periodEnd.toLocaleDateString("pt-BR")}`;
@@ -3375,8 +3410,9 @@ export async function updateComponentFilter(
 }
 
 // Função para validar se uma data é válida
-function isValidDate(d: any) {
+function isValidDate(d: any): boolean {
   if (!d) return false;
+  
   if (!(d instanceof Date)) {
     // Tentar converter string para Date se necessário
     try {
@@ -3385,7 +3421,13 @@ function isValidDate(d: any) {
       return false;
     }
   }
-  return !isNaN(d.getTime()) && d.getTime() > 0;
+  
+  const time = d.getTime();
+  // Verificar se é um número válido e não é uma data muito antiga (antes de 1970) ou muito futura
+  const minDate = new Date('1970-01-01').getTime();
+  const maxDate = new Date('2100-01-01').getTime();
+  
+  return !isNaN(time) && time >= minDate && time <= maxDate;
 }
 
 // Função para obter range de datas baseado no tipo de filtro em GMT-3
