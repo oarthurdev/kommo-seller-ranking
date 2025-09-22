@@ -11,6 +11,8 @@ import { queryClient } from "@/lib/queryClient";
 import { BrandingProvider } from "@/lib/brandingContext";
 import { CompanyProvider } from "@/lib/companyContext";
 import { UnifiedFilterProvider } from "@/lib/unifiedFilterContext";
+import { AuthProvider } from "@/lib/authContext";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import React, { useState, useEffect, useCallback } from "react";
 import { ROTATION_INTERVAL } from "@/lib/constants";
 
@@ -142,26 +144,30 @@ function PageTransition({ children }: { children: React.ReactNode }) {
 function AppContent() {
   return (
     <CompanyProvider>
-      <BrandingProvider>
-        <UnifiedFilterProvider>
-          <div className="bg-background min-h-screen">
-            {/* <PageTransition> */}
-            <AutoRotation />
-            <Switch>
-              <Route path="/ranking" component={RankingPage} />
-              <Route path="/ranking/broker/:id" component={BrokerProfilePage} />
-              <Route
-                path="/ranking/retrospective"
-                component={MonthlyRetrospectivePage}
-              />
-              <Route path="/ranking/filters" component={FilterConfigPage} />
-              <Route component={NotFound} />
-            </Switch>
-            {/* </PageTransition> */}
-            <Toaster />
-          </div>
-        </UnifiedFilterProvider>
-      </BrandingProvider>
+      <AuthProvider>
+        <BrandingProvider>
+          <UnifiedFilterProvider>
+            <ProtectedRoute>
+              <div className="bg-background min-h-screen">
+                {/* <PageTransition> */}
+                <AutoRotation />
+                <Switch>
+                  <Route path="/ranking" component={RankingPage} />
+                  <Route path="/ranking/broker/:id" component={BrokerProfilePage} />
+                  <Route
+                    path="/ranking/retrospective"
+                    component={MonthlyRetrospectivePage}
+                  />
+                  <Route path="/ranking/filters" component={FilterConfigPage} />
+                  <Route component={NotFound} />
+                </Switch>
+                {/* </PageTransition> */}
+                <Toaster />
+              </div>
+            </ProtectedRoute>
+          </UnifiedFilterProvider>
+        </BrandingProvider>
+      </AuthProvider>
     </CompanyProvider>
   );
 }

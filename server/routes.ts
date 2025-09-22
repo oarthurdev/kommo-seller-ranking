@@ -41,10 +41,15 @@ import {
   updateCompanyBranding,
 } from "./routes/company-branding";
 import { getCompanyStatus } from "./routes/company-status";
+import { loginAuth, checkAuthStatus } from "./routes/auth";
 import { companyContext } from "./middlewares/companyContext";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/company-status", companyContext, getCompanyStatus);
+
+  // Auth routes
+  app.post("/api/auth/login", companyContext, loginAuth);
+  app.get("/api/auth/status", companyContext, checkAuthStatus);
 
   app.get("/ranking", companyContext, (req, res) => {
     res.sendFile("index.html", { root: "dist" }); // ou onde estiver seu frontend
