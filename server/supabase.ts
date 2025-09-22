@@ -2329,19 +2329,31 @@ export async function getLostLeadsByStage(
         // Se é string, tentar fazer parse
         if (typeof lead.custom_fields_values === "string") {
           try {
-            // Primeiro, verificar se a string é válida JSON
-            const trimmedValue = lead.custom_fields_values.trim();
+            let jsonString = lead.custom_fields_values.trim();
             
             // Se não começar com '[' ou '{', pode ser uma string malformada
-            if (!trimmedValue.startsWith('[') && !trimmedValue.startsWith('{')) {
+            if (!jsonString.startsWith('[') && !jsonString.startsWith('{')) {
               console.log(`Lead ${lead.id} com custom_fields_values malformado: não é JSON válido`);
               continue;
             }
             
-            customFields = JSON.parse(trimmedValue);
+            // Converter formato Python-like para JSON válido
+            // Substituir aspas simples por aspas duplas
+            jsonString = jsonString.replace(/'/g, '"');
+            
+            // Substituir None por null
+            jsonString = jsonString.replace(/\bNone\b/g, 'null');
+            
+            // Substituir True por true
+            jsonString = jsonString.replace(/\bTrue\b/g, 'true');
+            
+            // Substituir False por false
+            jsonString = jsonString.replace(/\bFalse\b/g, 'false');
+            
+            customFields = JSON.parse(jsonString);
           } catch (jsonError) {
-            console.log(`Lead ${lead.id} erro ao fazer parse do JSON:`, jsonError.message);
-            console.log(`Valor problemático:`, lead.custom_fields_values?.substring(0, 100));
+            console.log(`Lead ${lead.id} erro ao fazer parse do JSON após conversão:`, jsonError.message);
+            console.log(`Valor problemático original:`, lead.custom_fields_values?.substring(0, 200));
             continue;
           }
         } else {
