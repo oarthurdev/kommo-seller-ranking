@@ -93,7 +93,7 @@ app.use((req, res, next) => {
     await setupVite(app, server); // Configuração do Vite em dev
   }
 
-  const port = 3000;
+  const port = 5000;
 
   // Detecta o SO para decidir o host
   const platform = os.platform();

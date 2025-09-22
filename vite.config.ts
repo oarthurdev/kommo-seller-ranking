@@ -21,8 +21,8 @@ export default defineConfig(({ mode }) => {
     root: path.resolve(__dirname, "client"),
     server: {
       host: "0.0.0.0",
-      port: 5173, // ou qualquer outra porta que preferir
-      allowedHosts: [".replit.dev"],
+      port: 5173,
+      allowedHosts: true,
     },
     build: {
       outDir: "../dist", // saída para a raiz do projeto

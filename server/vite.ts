@@ -35,9 +35,8 @@ export async function setupVite(app: Express, server: Server) {
       },
     },
     server: {
-      ...viteConfig.server,
       host: "0.0.0.0",
-      allowedHosts: [".replit.dev"],
+      allowedHosts: true,
     },
     appType: "custom",
   });
