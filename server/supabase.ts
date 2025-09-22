@@ -1082,9 +1082,9 @@ function convertToGMT3(utcDate: Date): Date {
   if (!utcDate || !(utcDate instanceof Date) || isNaN(utcDate.getTime())) {
     // Retorna data atual do Brasil se a entrada for inválida
     const now = new Date();
-    return new Date(now.getTime() - (3 * 60 * 60 * 1000));
+    return new Date(now.getTime() - 3 * 60 * 60 * 1000);
   }
-  const gmt3Date = new Date(utcDate.getTime() - (3 * 60 * 60 * 1000));
+  const gmt3Date = new Date(utcDate.getTime() - 3 * 60 * 60 * 1000);
   return gmt3Date;
 }
 
@@ -1136,10 +1136,10 @@ export async function getActivityHeatmap(
       // Validar e criar datas de forma mais robusta
       try {
         let startLocal: Date, endLocal: Date;
-        
-        if (typeof startDate === 'string' && typeof endDate === 'string') {
+
+        if (typeof startDate === "string" && typeof endDate === "string") {
           // Tentar diferentes formatos de data
-          if (startDate.includes('T')) {
+          if (startDate.includes("T")) {
             // Se já contém horário, usar diretamente
             startLocal = new Date(startDate);
             endLocal = new Date(endDate);
@@ -1153,26 +1153,42 @@ export async function getActivityHeatmap(
           startLocal = new Date(startDate);
           endLocal = new Date(endDate);
         }
-        
+
         // Verificar se as datas são válidas
         if (!isValidDate(startLocal) || !isValidDate(endLocal)) {
-          throw new Error(`Datas inválidas: ${startDate} -> ${startLocal}, ${endDate} -> ${endLocal}`);
+          throw new Error(
+            `Datas inválidas: ${startDate} -> ${startLocal}, ${endDate} -> ${endLocal}`,
+          );
         }
-        
+
         periodStart = startLocal;
         periodEnd = endLocal;
-        
-        console.log(`Datas customizadas processadas com sucesso: ${periodStart.toISOString()} até ${periodEnd.toISOString()}`);
+
+        console.log(
+          `Datas customizadas processadas com sucesso: ${periodStart.toISOString()} até ${periodEnd.toISOString()}`,
+        );
       } catch (error) {
         console.error("Erro ao processar datas customizadas:", error);
-        console.log(`Dados recebidos: startDate=${startDate}, endDate=${endDate}`);
-        
+        console.log(
+          `Dados recebidos: startDate=${startDate}, endDate=${endDate}`,
+        );
+
         // Fallback para mês atual
         const now = new Date();
         periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-        
-        console.log(`Usando fallback: ${periodStart.toISOString()} até ${periodEnd.toISOString()}`);
+        periodEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
+
+        console.log(
+          `Usando fallback: ${periodStart.toISOString()} até ${periodEnd.toISOString()}`,
+        );
       }
     } else {
       // Buscar filtro salvo para 'broker_heatmap'
@@ -1189,7 +1205,15 @@ export async function getActivityHeatmap(
       let selectedYear = heatmapFilter?.year;
 
       // Validar se o filtro tipo é um dos novos tipos
-      const validDateRanges = ["7_days", "30_days", "current_week", "current_month", "last_month", "month", "custom_range"];
+      const validDateRanges = [
+        "7_days",
+        "30_days",
+        "current_week",
+        "current_month",
+        "last_month",
+        "month",
+        "custom_range",
+      ];
       if (!validDateRanges.includes(filterType)) {
         filterType = "current_month"; // Default para mês atual
       }
@@ -1212,28 +1236,44 @@ export async function getActivityHeatmap(
         // Fallback para mês atual
         const now = new Date();
         periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-        periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        periodEnd = new Date(
+          now.getFullYear(),
+          now.getMonth() + 1,
+          0,
+          23,
+          59,
+          59,
+          999,
+        );
       }
     }
 
     // Validar se as datas do período são válidas
     if (!isValidDate(periodStart) || !isValidDate(periodEnd)) {
       console.error("Datas de período inválidas:", {
-        periodStart: periodStart?.toString() || 'undefined',
-        periodEnd: periodEnd?.toString() || 'undefined',
+        periodStart: periodStart?.toString() || "undefined",
+        periodEnd: periodEnd?.toString() || "undefined",
         originalStartDate: startDate,
         originalEndDate: endDate,
-        filterType: filterType
+        filterType: filterType,
       });
-      
+
       // Usar mês atual como fallback
       const now = new Date();
       periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
-      
+      periodEnd = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
       console.log("Usando período fallback (mês atual):", {
         start: periodStart.toISOString(),
-        end: periodEnd.toISOString()
+        end: periodEnd.toISOString(),
       });
     }
 
@@ -1247,14 +1287,34 @@ export async function getActivityHeatmap(
 
     // Horários comerciais com intervalos de 30 minutos (8:00 às 18:00)
     const horarios = [
-      "08:00", "08:30", "09:00", "09:30", "10:00", "10:30", "11:00", "11:30",
-      "12:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30",
-      "17:00", "17:30", "18:00",
+      "08:00",
+      "08:30",
+      "09:00",
+      "09:30",
+      "10:00",
+      "10:30",
+      "11:00",
+      "11:30",
+      "12:00",
+      "13:30",
+      "14:00",
+      "14:30",
+      "15:00",
+      "15:30",
+      "16:00",
+      "16:30",
+      "17:00",
+      "17:30",
+      "18:00",
     ];
 
     // Inicializar matrizes de dados com zeros - 7 dias x 19 horários
-    const mensagensRecebidasData = Array(7).fill(0).map(() => Array(19).fill(0));
-    const mensagensEnviadasData = Array(7).fill(0).map(() => Array(19).fill(0));
+    const mensagensRecebidasData = Array(7)
+      .fill(0)
+      .map(() => Array(19).fill(0));
+    const mensagensEnviadasData = Array(7)
+      .fill(0)
+      .map(() => Array(19).fill(0));
 
     // Função para obter o índice do dia (0=Segunda, 6=Domingo) considerando GMT-3
     const getDayIndex = (utcDate: Date) => {
@@ -1299,10 +1359,13 @@ export async function getActivityHeatmap(
       .eq("company_id", companyId)
       .gte("criado_em", periodStart.toISOString())
       .lte("criado_em", periodEnd.toISOString());
-      // .eq("tipo", "mensagem_enviada"); // Considerar outras atividades como mensagens
+    // .eq("tipo", "mensagem_enviada"); // Considerar outras atividades como mensagens
 
     if (sentError) {
-      console.error("Erro ao buscar atividades de mensagens enviadas:", sentError);
+      console.error(
+        "Erro ao buscar atividades de mensagens enviadas:",
+        sentError,
+      );
     }
 
     // Buscar mensagens recebidas (from from_webhook)
@@ -1314,7 +1377,10 @@ export async function getActivityHeatmap(
       .lte("inserted_at", periodEnd.toISOString());
 
     if (receivedError) {
-      console.error("Erro ao buscar atividades de mensagens recebidas:", receivedError);
+      console.error(
+        "Erro ao buscar atividades de mensagens recebidas:",
+        receivedError,
+      );
     }
 
     // Filtrar leads do corretor para validação
@@ -1336,14 +1402,15 @@ export async function getActivityHeatmap(
       };
     }
 
-    const brokerLeadIds = new Set(brokerLeads?.map(lead => lead.id));
+    const brokerLeadIds = new Set(brokerLeads?.map((lead) => lead.id));
 
     // Sets para rastrear leads únicos que já foram contados em cada slot de tempo
     const leadsEnviadasContados = new Map<string, Set<number>>(); // key: "dia_hora", value: Set de lead_ids
     const leadsRecebidasContados = new Map<string, Set<number>>(); // key: "dia_hora", value: Set de lead_ids
 
     // Função para gerar chave única para dia/hora
-    const getSlotKey = (dayIndex: number, timeIndex: number) => `${dayIndex}_${timeIndex}`;
+    const getSlotKey = (dayIndex: number, timeIndex: number) =>
+      `${dayIndex}_${timeIndex}`;
 
     // Processar mensagens enviadas - contar apenas 1 por lead por slot de tempo
     sentActivities?.forEach((activity) => {
@@ -1357,13 +1424,13 @@ export async function getActivityHeatmap(
 
         if (dayIndex >= 0 && dayIndex < 7 && timeIndex >= 0 && timeIndex < 19) {
           const slotKey = getSlotKey(dayIndex, timeIndex);
-          
+
           if (!leadsEnviadasContados.has(slotKey)) {
             leadsEnviadasContados.set(slotKey, new Set());
           }
-          
+
           const leadsNoSlot = leadsEnviadasContados.get(slotKey)!;
-          
+
           // Só incrementar se este lead ainda não foi contado neste slot
           if (!leadsNoSlot.has(activity.lead_id)) {
             leadsNoSlot.add(activity.lead_id);
@@ -1385,13 +1452,13 @@ export async function getActivityHeatmap(
 
         if (dayIndex >= 0 && dayIndex < 7 && timeIndex >= 0 && timeIndex < 19) {
           const slotKey = getSlotKey(dayIndex, timeIndex);
-          
+
           if (!leadsRecebidasContados.has(slotKey)) {
             leadsRecebidasContados.set(slotKey, new Set());
           }
-          
+
           const leadsNoSlot = leadsRecebidasContados.get(slotKey)!;
-          
+
           // Só incrementar se este lead ainda não foi contado neste slot
           if (!leadsNoSlot.has(activity.lead_id)) {
             leadsNoSlot.add(activity.lead_id);
@@ -2197,19 +2264,6 @@ export async function getLostLeadsByStage(
   endDate?: string,
   allPipelines: boolean = false,
 ) {
-  // Criar chave de cache
-  const cacheKey = `${companyId}-${brokerId || "all"}-${startDate || ""}-${endDate || ""}-${allPipelines}`;
-  const now = Date.now();
-
-  // Verificar cache
-  if (lostLeadsCache.has(cacheKey)) {
-    const cached = lostLeadsCache.get(cacheKey)!;
-    if (now - cached.timestamp < CACHE_DURATION) {
-      return cached.data;
-    }
-    lostLeadsCache.delete(cacheKey);
-  }
-
   // Buscar filtro para lost_leads_funnel
   let lostLeadsFilter;
   let currentPeriodStartUTC: Date, currentPeriodEndUTC: Date;
@@ -2281,7 +2335,9 @@ export async function getLostLeadsByStage(
     // Buscar leads perdidos (status_id = 143) no período
     let leadsQuery = supabase
       .from("leads")
-      .select("id, custom_fields_values, valor, criado_em, atualizado_em, pipeline_id")
+      .select(
+        "id, custom_fields_values, valor, criado_em, atualizado_em, pipeline_id",
+      )
       .eq("company_id", companyId)
       .eq("status_id", 143)
       .in("pipeline_id", availablePipelineIds)
@@ -2325,35 +2381,43 @@ export async function getLostLeadsByStage(
         }
 
         let customFields;
-        
+
         // Se é string, tentar fazer parse
         if (typeof lead.custom_fields_values === "string") {
           try {
             let jsonString = lead.custom_fields_values.trim();
-            
+
             // Se não começar com '[' ou '{', pode ser uma string malformada
-            if (!jsonString.startsWith('[') && !jsonString.startsWith('{')) {
-              console.log(`Lead ${lead.id} com custom_fields_values malformado: não é JSON válido`);
+            if (!jsonString.startsWith("[") && !jsonString.startsWith("{")) {
+              console.log(
+                `Lead ${lead.id} com custom_fields_values malformado: não é JSON válido`,
+              );
               continue;
             }
-            
+
             // Converter formato Python-like para JSON válido
             // Substituir aspas simples por aspas duplas
             jsonString = jsonString.replace(/'/g, '"');
-            
+
             // Substituir None por null
-            jsonString = jsonString.replace(/\bNone\b/g, 'null');
-            
+            jsonString = jsonString.replace(/\bNone\b/g, "null");
+
             // Substituir True por true
-            jsonString = jsonString.replace(/\bTrue\b/g, 'true');
-            
+            jsonString = jsonString.replace(/\bTrue\b/g, "true");
+
             // Substituir False por false
-            jsonString = jsonString.replace(/\bFalse\b/g, 'false');
-            
+            jsonString = jsonString.replace(/\bFalse\b/g, "false");
+
             customFields = JSON.parse(jsonString);
           } catch (jsonError) {
-            console.log(`Lead ${lead.id} erro ao fazer parse do JSON após conversão:`, jsonError.message);
-            console.log(`Valor problemático original:`, lead.custom_fields_values?.substring(0, 200));
+            console.log(
+              `Lead ${lead.id} erro ao fazer parse do JSON após conversão:`,
+              jsonError.message,
+            );
+            console.log(
+              `Valor problemático original:`,
+              lead.custom_fields_values?.substring(0, 200),
+            );
             continue;
           }
         } else {
@@ -2363,13 +2427,19 @@ export async function getLostLeadsByStage(
 
         // Verificar se é array válido
         if (!customFields || !Array.isArray(customFields)) {
-          console.log(`Lead ${lead.id} com custom_fields_values inválido - não é array`);
+          console.log(
+            `Lead ${lead.id} com custom_fields_values inválido - não é array`,
+          );
           continue;
         }
 
         // Encontrar campos que têm value: true e correspondem a stage_names
         const activeStageFields = customFields.filter((field) => {
-          if (!field.field_name || !field.values || !Array.isArray(field.values)) {
+          if (
+            !field.field_name ||
+            !field.values ||
+            !Array.isArray(field.values)
+          ) {
             return false;
           }
 
@@ -2390,7 +2460,7 @@ export async function getLostLeadsByStage(
 
         // Buscar a etapa "perdido" (status 143) para saber qual pipeline
         const lostStage = stagesList?.find((stage) => stage.stage_id === 143);
-        
+
         // Para cada campo ativo que corresponde a uma etapa
         for (const activeField of activeStageFields) {
           const stageName = activeField.field_name;
@@ -2421,8 +2491,10 @@ export async function getLostLeadsByStage(
           lostByPreviousStage[stageName].count++;
 
           // Somar valor se existir
-          const valor = typeof lead.valor === "number" ? lead.valor : 
-                       parseFloat(lead.valor?.toString() || "0") || 0;
+          const valor =
+            typeof lead.valor === "number"
+              ? lead.valor
+              : parseFloat(lead.valor?.toString() || "0") || 0;
           lostByPreviousStage[stageName].totalValue += valor;
 
           console.log(
@@ -2433,9 +2505,6 @@ export async function getLostLeadsByStage(
         console.error(`Erro ao processar lead ${lead.id}:`, parseError);
       }
     }
-
-    // Armazenar no cache
-    lostLeadsCache.set(cacheKey, { data: lostByPreviousStage, timestamp: now });
 
     console.log(`Resultado final leads perdidos:`, lostByPreviousStage);
     return lostByPreviousStage;
@@ -3428,7 +3497,7 @@ export async function updateComponentFilter(
 // Função para validar se uma data é válida
 function isValidDate(d: any): boolean {
   if (!d) return false;
-  
+
   if (!(d instanceof Date)) {
     // Tentar converter string para Date se necessário
     try {
@@ -3437,12 +3506,12 @@ function isValidDate(d: any): boolean {
       return false;
     }
   }
-  
+
   const time = d.getTime();
   // Verificar se é um número válido e não é uma data muito antiga (antes de 1970) ou muito futura
-  const minDate = new Date('1970-01-01').getTime();
-  const maxDate = new Date('2100-01-01').getTime();
-  
+  const minDate = new Date("1970-01-01").getTime();
+  const maxDate = new Date("2100-01-01").getTime();
+
   return !isNaN(time) && time >= minDate && time <= maxDate;
 }
 
@@ -3456,7 +3525,7 @@ export function getDateRangeBrazil(
 ): { start: Date; end: Date; startFormatted: string; endFormatted: string } {
   // Criar data atual no fuso GMT-3
   const nowUTC = new Date();
-  const now = new Date(nowUTC.getTime() - (3 * 60 * 60 * 1000)); // GMT-3
+  const now = new Date(nowUTC.getTime() - 3 * 60 * 60 * 1000); // GMT-3
 
   const formatDateForDB = (date: Date): string => {
     const y = date.getFullYear();
@@ -3497,8 +3566,8 @@ export function getDateRangeBrazil(
       );
 
       // Converter para UTC considerando GMT-3
-      const startUTC = new Date(start.getTime() + (3 * 60 * 60 * 1000));
-      const endUTC = new Date(end.getTime() + (3 * 60 * 60 * 1000));
+      const startUTC = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+      const endUTC = new Date(end.getTime() + 3 * 60 * 60 * 1000);
 
       return {
         start: startUTC,
@@ -3516,8 +3585,10 @@ export function getDateRangeBrazil(
       nowEnd.setHours(23, 59, 59, 999);
 
       // Converter para UTC considerando GMT-3
-      const sevenDaysUTC = new Date(sevenDaysAgo.getTime() + (3 * 60 * 60 * 1000));
-      const nowEndUTC = new Date(nowEnd.getTime() + (3 * 60 * 60 * 1000));
+      const sevenDaysUTC = new Date(
+        sevenDaysAgo.getTime() + 3 * 60 * 60 * 1000,
+      );
+      const nowEndUTC = new Date(nowEnd.getTime() + 3 * 60 * 60 * 1000);
 
       return {
         start: sevenDaysUTC,
@@ -3535,8 +3606,12 @@ export function getDateRangeBrazil(
       thirtyDaysEnd.setHours(23, 59, 59, 999);
 
       // Converter para UTC considerando GMT-3
-      const thirtyDaysUTC = new Date(thirtyDaysAgo.getTime() + (3 * 60 * 60 * 1000));
-      const thirtyDaysEndUTC = new Date(thirtyDaysEnd.getTime() + (3 * 60 * 60 * 1000));
+      const thirtyDaysUTC = new Date(
+        thirtyDaysAgo.getTime() + 3 * 60 * 60 * 1000,
+      );
+      const thirtyDaysEndUTC = new Date(
+        thirtyDaysEnd.getTime() + 3 * 60 * 60 * 1000,
+      );
 
       return {
         start: thirtyDaysUTC,
@@ -3555,8 +3630,8 @@ export function getDateRangeBrazil(
       endOfWeek.setHours(23, 59, 59, 999);
 
       // Converter para UTC considerando GMT-3
-      const startWeekUTC = new Date(startOfWeek.getTime() + (3 * 60 * 60 * 1000));
-      const endWeekUTC = new Date(endOfWeek.getTime() + (3 * 60 * 60 * 1000));
+      const startWeekUTC = new Date(startOfWeek.getTime() + 3 * 60 * 60 * 1000);
+      const endWeekUTC = new Date(endOfWeek.getTime() + 3 * 60 * 60 * 1000);
 
       return {
         start: startWeekUTC,
@@ -3579,8 +3654,10 @@ export function getDateRangeBrazil(
       );
 
       // Converter para UTC considerando GMT-3
-      const startMonthUTC = new Date(startOfMonth.getTime() + (3 * 60 * 60 * 1000));
-      const endMonthUTC = new Date(endOfMonth.getTime() + (3 * 60 * 60 * 1000));
+      const startMonthUTC = new Date(
+        startOfMonth.getTime() + 3 * 60 * 60 * 1000,
+      );
+      const endMonthUTC = new Date(endOfMonth.getTime() + 3 * 60 * 60 * 1000);
 
       return {
         start: startMonthUTC,
@@ -3607,8 +3684,12 @@ export function getDateRangeBrazil(
       );
 
       // Converter para UTC considerando GMT-3
-      const startLastMonthUTC = new Date(startOfLastMonth.getTime() + (3 * 60 * 60 * 1000));
-      const endLastMonthUTC = new Date(endOfLastMonth.getTime() + (3 * 60 * 60 * 1000));
+      const startLastMonthUTC = new Date(
+        startOfLastMonth.getTime() + 3 * 60 * 60 * 1000,
+      );
+      const endLastMonthUTC = new Date(
+        endOfLastMonth.getTime() + 3 * 60 * 60 * 1000,
+      );
 
       return {
         start: startLastMonthUTC,
@@ -3647,8 +3728,10 @@ export function getDateRangeBrazil(
       );
 
       // Converter para UTC considerando GMT-3
-      const defaultStartUTC = new Date(defaultStart.getTime() + (3 * 60 * 60 * 1000));
-      const defaultEndUTC = new Date(defaultEnd.getTime() + (3 * 60 * 60 * 1000));
+      const defaultStartUTC = new Date(
+        defaultStart.getTime() + 3 * 60 * 60 * 1000,
+      );
+      const defaultEndUTC = new Date(defaultEnd.getTime() + 3 * 60 * 60 * 1000);
 
       return {
         start: defaultStartUTC,
@@ -3672,8 +3755,10 @@ export function getDateRangeBrazil(
   );
 
   // Converter para UTC considerando GMT-3
-  const fallbackStartUTC = new Date(fallbackStart.getTime() + (3 * 60 * 60 * 1000));
-  const fallbackEndUTC = new Date(fallbackEnd.getTime() + (3 * 60 * 60 * 1000));
+  const fallbackStartUTC = new Date(
+    fallbackStart.getTime() + 3 * 60 * 60 * 1000,
+  );
+  const fallbackEndUTC = new Date(fallbackEnd.getTime() + 3 * 60 * 60 * 1000);
 
   return {
     start: fallbackStartUTC,
