@@ -56,6 +56,7 @@ export async function getBrokerRankings(
 
     // Primeiro, obter o pipeline_id da configuração da empresa
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -124,26 +125,6 @@ export async function getBrokerRankings(
     // Transform the data to flatten the broker information and add metrics based on lead creation month
     const rankingsResults = await Promise.all(
       data.map(async (item) => {
-        // Contar TODOS os leads que entraram neste mês específico baseado em criado_em
-        const { data: allMonthLeads } = await supabase
-          .from("leads")
-          .select("id, status_id, valor, criado_em, etapa")
-          .eq("responsavel_id", item.id)
-          .eq("company_id", companyId)
-          .in(
-            "pipeline_id",
-            availablePipelineIds.length > 0 ? availablePipelineIds : [0],
-          )
-          .gte("criado_em", periodStart.toISOString())
-          .lte("criado_em", periodEnd.toISOString());
-
-        const leads = allMonthLeads || [];
-        const totalLeads = leads.length;
-
-        console.log(
-          `Broker ${item.nome} (${item.id}): ${totalLeads} leads entraram em ${targetMonth}/${targetYear}`,
-        );
-
         // Calcular propostas baseado nas atividades do mês
         const propostasEnviadas = await getPropostasEnviadasNoMes(
           item.id,
@@ -157,7 +138,7 @@ export async function getBrokerRankings(
         const { data: pointsData } = await supabase
           .from("broker_points")
           .select(
-            "id, pontos, vendas_realizadas, leads_perdidos, leads_descartados",
+            "id, pontos, vendas_realizadas, leads_perdidos, leads_descartados, total_leads",
           )
           .eq("id", item.id)
           .eq("company_id", companyId)
@@ -169,8 +150,8 @@ export async function getBrokerRankings(
 
         // Calcular taxa de conversão baseada nos leads que entraram no mês
         const taxaConversao =
-          totalLeads > 0
-            ? (pointsData?.vendas_realizadas / totalLeads) * 100
+          pointsData?.total_leads > 0
+            ? (pointsData?.vendas_realizadas / pointsData?.total_leads) * 100
             : 0;
 
         return {
@@ -185,12 +166,12 @@ export async function getBrokerRankings(
           created_at: item.created_at,
           updated_at: item.updated_at,
           pontos: pointsData?.pontos || 0,
-          total_leads: totalLeads,
+          total_leads: pointsData?.total_leads,
           vendas_realizadas: pointsData?.vendas_realizadas,
           leads_perdidos: pointsData?.leads_perdidos,
           leads_descartados: pointsData?.leads_descartados,
           propostas_enviadas: propostasEnviadas,
-          leads_capturados: totalLeads,
+          leads_capturados: pointsData?.total_leads,
           taxa_conversao: taxaConversao,
         };
       }),
@@ -377,6 +358,7 @@ export async function getBrokerTotalLeadsLastMonth(
   try {
     // Primeiro, obter o pipeline_id da configuração da empresa
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -483,6 +465,7 @@ async function calculateBrokerMetricsAllPipelines(
   try {
     // Buscar configuração dos pipelines
     const { data: configData } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -546,9 +529,7 @@ async function calculateBrokerMetricsAllPipelines(
       .select("id, status_id, pipeline_id, valor, criado_em")
       .eq("responsavel_id", brokerId)
       .eq("company_id", companyId)
-      .in("pipeline_id", availablePipelineIds)
-      .gte("criado_em", currentPeriodStart.toISOString())
-      .lte("criado_em", currentPeriodEnd.toISOString());
+      .in("pipeline_id", availablePipelineIds);
 
     if (leadsError) {
       console.error("Erro ao buscar leads do corretor:", leadsError);
@@ -629,6 +610,7 @@ export async function calculateBrokerConversionRate(
 
     // Buscar configuração dos pipelines
     const { data: configData } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -684,6 +666,7 @@ export async function getBrokerLeads(brokerId: number, companyId: string) {
   try {
     // Primeiro, obter o pipeline_id da configuração da empresa
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -775,6 +758,7 @@ export async function getBrokerLeadsWithTicket(
 
     // Buscar configuração dos pipelines
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -860,6 +844,7 @@ export async function getBrokerLeadsWithTicket(
 
     // Buscar informações da API do Kommo para tempo de resposta
     const { data: kommoApiConfig, error: kommoApiError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("api_url, access_token")
       .eq("company_id", companyId)
@@ -989,6 +974,7 @@ export async function getBrokerLeadEtapaCounts(
   try {
     // Primeiro, obter o pipeline_id da configuração da empresa
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -1094,6 +1080,7 @@ export async function getActivityHeatmap(
   try {
     // Buscar configuração do Kommo
     const { data: config, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("api_url, access_token, pipeline_id")
       .eq("company_id", companyId)
@@ -1528,6 +1515,7 @@ export async function getBrokerInactivityTime(
   try {
     // Buscar configuração do Kommo
     const { data: config, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("api_url, access_token")
       .eq("company_id", companyId)
@@ -1835,6 +1823,7 @@ export async function getTotalSales(
 
     // Buscar configuração dos pipelines
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -1970,6 +1959,7 @@ export async function getLeadsByStageCurrentMonth(companyId: string) {
   try {
     // Buscar o pipeline_id da kommo_config
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -2150,6 +2140,7 @@ export async function getLostLeadsByStage(
   try {
     // Buscar configuração do Kommo para API
     const { data: kommoConfig, error: kommoError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("api_url, access_token")
       .eq("company_id", companyId)
@@ -2366,6 +2357,7 @@ export async function getBrokerWeeklyPerformanceMetrics(
 
     // Buscar configuração do Kommo
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -2476,6 +2468,7 @@ export async function getBrokerWeeklyPerformanceMetrics(
 export async function getKommoConfig(companyId: string) {
   try {
     const { data, error } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("*")
       .eq("company_id", companyId)
@@ -2632,6 +2625,7 @@ export async function getMonthlyComparison(companyId: string) {
   try {
     // Buscar o pipeline_id da kommo_config
     const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
       .from("kommo_config")
       .select("pipeline_id")
       .eq("company_id", companyId)
@@ -3206,6 +3200,7 @@ export async function processMonthlyRetrospectives() {
   try {
     // Buscar todas as empresas ativas
     const { data: companies } = await supabase
+      .schema("cf_companies")
       .from("companies")
       .select("id")
       .eq("active", true);

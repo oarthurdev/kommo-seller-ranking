@@ -114,6 +114,7 @@ export async function getKommoConfig(company_id: number | undefined) {
   if (!company_id) return null;
   
   const { data, error } = await supabase
+    .schema("cf_kommo")
     .from("kommo_config")
     .select("*")
     .eq("company_id", company_id)

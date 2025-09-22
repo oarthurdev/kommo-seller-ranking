@@ -19,6 +19,7 @@ export async function companyContext(
 
   try {
     const { data, error } = await supabase
+      .schema("cf_companies")
       .from("companies")
       .select("id")
       .eq("subdomain", subdomain)

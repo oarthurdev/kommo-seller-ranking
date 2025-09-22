@@ -22,8 +22,8 @@ model activities {
   hora                 Int?
   updated_at           DateTime?  @default(now()) @db.Timestamp(6)
   company_id           String?    @db.Uuid
-  status_anterior      String?    @db.VarChar
-  status_novo          String?    @db.VarChar
+  status_anterior      BigInt?
+  status_novo          BigInt?
   texto_mensagem       String?    @db.VarChar
   fonte_mensagem       String?    @db.VarChar
   texto_tarefa         String?    @db.VarChar
@@ -32,13 +32,12 @@ model activities {
   duracao_chamada      String?    @db.VarChar
   resultado_chamada    String?    @db.VarChar
   texto_sms            String?    @db.VarChar
-  responsavel_anterior String?    @db.VarChar
-  responsavel_novo     String?    @db.VarChar
+  responsavel_anterior BigInt?
+  responsavel_novo     BigInt?
   nome_tag             String?    @db.VarChar
   entity_type          String?    @db.VarChar
-  entity_id            String?    @db.VarChar
+  entity_id            BigInt?
   companies            companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_activities_company")
-  leads                leads?     @relation(fields: [lead_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_activities_lead")
 
   @@schema("public")
 }
@@ -96,6 +95,7 @@ model companies {
   leads             leads[]
   metric_results    metric_results[]
   sla_metrics       sla_metrics[]
+  stages_list       stages_list[]
   sync_logs         sync_logs[]
 
   @@schema("cf_companies")
@@ -236,23 +236,22 @@ model kommo_config {
 }
 
 model leads {
-  id             BigInt       @id
+  id             BigInt     @id
   nome           String
   responsavel_id BigInt?
   contato_nome   String?
-  valor          Decimal?     @db.Decimal
+  valor          Decimal?   @db.Decimal
   status_id      BigInt?
   pipeline_id    BigInt?
   etapa          String?
-  criado_em      DateTime?    @db.Timestamp(6)
-  atualizado_em  DateTime?    @db.Timestamp(6)
-  fechado        Boolean?     @default(false)
+  criado_em      DateTime?  @db.Timestamp(6)
+  atualizado_em  DateTime?  @db.Timestamp(6)
+  fechado        Boolean?   @default(false)
   status         String?
-  updated_at     DateTime?    @default(now()) @db.Timestamp(6)
-  company_id     String?      @db.Uuid
-  activities     activities[]
-  brokers        brokers?     @relation(fields: [responsavel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_broker")
-  companies      companies?   @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_company")
+  updated_at     DateTime?  @default(now()) @db.Timestamp(6)
+  company_id     String?    @db.Uuid
+  brokers        brokers?   @relation(fields: [responsavel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_broker")
+  companies      companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_company")
 
   @@schema("public")
 }
@@ -335,6 +334,21 @@ model sla_metrics {
   updated_at                 DateTime? @default(now()) @db.Timestamp(6)
   brokers                    brokers   @relation(fields: [broker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   companies                  companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+model stages_list {
+  id            BigInt     @id
+  stage_id      BigInt?
+  stage_name    String?    @db.VarChar
+  pipeline_id   BigInt?
+  created_at    DateTime   @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime?  @default(now()) @db.Timestamp(6)
+  company_id    String?    @db.Uuid
+  pipeline_name String?    @db.VarChar
+  position      BigInt?
+  companies     companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@schema("public")
 }
