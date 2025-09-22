@@ -1,0 +1,42 @@
+Encontrados 20 leads perdidos no período
+Lead 20466137 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20424843 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20395877 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20490977 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20458489 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20319473 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20432997 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20440837 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20427589 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20463359 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20427425 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20475989 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20471679 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20414365 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20515469 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20437143 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20186721 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20487533 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20492895 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Lead 20383467 erro ao fazer parse do JSON: Expected property name or '}' in JSON at position 2
+Valor problemático: [{'field_id': 1041695, 'field_name': 'Sem contato', 'field_code': None, 'field_type': 'checkbox', 'v
+Resultado final leads perdidos: {}
