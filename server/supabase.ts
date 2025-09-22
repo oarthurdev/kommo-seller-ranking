@@ -2325,6 +2325,18 @@ export async function getLostLeadsByStage(
 
     const lostStageName = stageRow.stage_name;
 
+    // Buscar lista de estágios da empresa para validação
+    const { data: stagesList, error: stagesError } = await supabase
+      .from("stages_list")
+      .select("stage_name")
+      .eq("company_id", companyId)
+      .in("pipeline_id", availablePipelineIds);
+
+    if (stagesError) {
+      console.error("Erro ao buscar lista de estágios:", stagesError);
+      return {};
+    }
+
     // Buscar leads no período (sem status_id)
     let leadsQuery = supabase
       .from("leads")
