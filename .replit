@@ -38,3 +38,6 @@ args = "npm run dev"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "tsx server/index.ts"
+
+[agent]
+expertMode = true
