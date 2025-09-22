@@ -1242,7 +1242,6 @@ export async function getActivityHeatmap(
       .from("from_webhook")
       .select("inserted_at, lead_id") // Incluir lead_id para validação posterior
       .eq("broker_id", brokerId)
-      .eq("company_id", companyId)
       .gte("inserted_at", periodStart.toISOString())
       .lte("inserted_at", periodEnd.toISOString());
 
@@ -1271,7 +1270,14 @@ export async function getActivityHeatmap(
 
     const brokerLeadIds = new Set(brokerLeads?.map(lead => lead.id));
 
-    // Processar mensagens enviadas
+    // Sets para rastrear leads únicos que já foram contados em cada slot de tempo
+    const leadsEnviadasContados = new Map<string, Set<number>>(); // key: "dia_hora", value: Set de lead_ids
+    const leadsRecebidasContados = new Map<string, Set<number>>(); // key: "dia_hora", value: Set de lead_ids
+
+    // Função para gerar chave única para dia/hora
+    const getSlotKey = (dayIndex: number, timeIndex: number) => `${dayIndex}_${timeIndex}`;
+
+    // Processar mensagens enviadas - contar apenas 1 por lead por slot de tempo
     sentActivities?.forEach((activity) => {
       if (!activity.criado_em) return; // Pular se não houver data
 
@@ -1282,12 +1288,24 @@ export async function getActivityHeatmap(
         const timeIndex = getTimeIndex(messageDate);
 
         if (dayIndex >= 0 && dayIndex < 7 && timeIndex >= 0 && timeIndex < 19) {
-          mensagensEnviadasData[dayIndex][timeIndex]++;
+          const slotKey = getSlotKey(dayIndex, timeIndex);
+          
+          if (!leadsEnviadasContados.has(slotKey)) {
+            leadsEnviadasContados.set(slotKey, new Set());
+          }
+          
+          const leadsNoSlot = leadsEnviadasContados.get(slotKey)!;
+          
+          // Só incrementar se este lead ainda não foi contado neste slot
+          if (!leadsNoSlot.has(activity.lead_id)) {
+            leadsNoSlot.add(activity.lead_id);
+            mensagensEnviadasData[dayIndex][timeIndex]++;
+          }
         }
       }
     });
 
-    // Processar mensagens recebidas
+    // Processar mensagens recebidas - contar apenas 1 por lead por slot de tempo
     receivedActivities?.forEach((activity) => {
       if (!activity.inserted_at) return; // Pular se não houver data
 
@@ -1298,7 +1316,19 @@ export async function getActivityHeatmap(
         const timeIndex = getTimeIndex(messageDate);
 
         if (dayIndex >= 0 && dayIndex < 7 && timeIndex >= 0 && timeIndex < 19) {
-          mensagensRecebidasData[dayIndex][timeIndex]++;
+          const slotKey = getSlotKey(dayIndex, timeIndex);
+          
+          if (!leadsRecebidasContados.has(slotKey)) {
+            leadsRecebidasContados.set(slotKey, new Set());
+          }
+          
+          const leadsNoSlot = leadsRecebidasContados.get(slotKey)!;
+          
+          // Só incrementar se este lead ainda não foi contado neste slot
+          if (!leadsNoSlot.has(activity.lead_id)) {
+            leadsNoSlot.add(activity.lead_id);
+            mensagensRecebidasData[dayIndex][timeIndex]++;
+          }
         }
       }
     });

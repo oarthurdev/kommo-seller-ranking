@@ -50,6 +50,28 @@ export function PeriodFilter({
   const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
+  // Definir opções específicas para o heatmap
+  const heatmapFilterOptions = [
+    { value: "7_days", label: "Últimos 7 dias" },
+    { value: "30_days", label: "Últimos 30 dias" },
+    { value: "current_week", label: "Semana atual" },
+    { value: "current_month", label: "Mês atual" },
+    { value: "custom_range", label: "Período personalizado" },
+  ];
+
+  const generalFilterOptions = [
+    { value: "7_days", label: "Últimos 7 dias" },
+    { value: "30_days", label: "Últimos 30 dias" },
+    { value: "current_week", label: "Semana atual" },
+    { value: "current_month", label: "Mês atual" },
+    { value: "last_month", label: "Mês passado" },
+    { value: "month", label: "Mês específico" },
+    { value: "custom_range", label: "Período personalizado" },
+  ];
+
+  // Usar opções específicas para heatmap ou opções gerais para outros componentes
+  const filterOptions = componentName === "broker_heatmap" ? heatmapFilterOptions : generalFilterOptions;
+
   // Load existing filter for this component
   useEffect(() => {
     const loadExistingFilter = async () => {
@@ -126,8 +148,8 @@ export function PeriodFilter({
   };
 
   const applyFilter = async (
-    type: string, 
-    start?: string, 
+    type: string,
+    start?: string,
     end?: string,
     month?: number,
     year?: number
@@ -167,7 +189,7 @@ export function PeriodFilter({
       return `${currentFilter.month}/${currentFilter.year}`;
     }
 
-    const option = FILTER_OPTIONS.find(opt => opt.value === filterType);
+    const option = filterOptions.find(opt => opt.value === filterType);
     return option?.label || filterType;
   };
 
@@ -182,7 +204,7 @@ export function PeriodFilter({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {FILTER_OPTIONS.map((option) => (
+            {filterOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
@@ -235,7 +257,7 @@ export function PeriodFilter({
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {FILTER_OPTIONS.map((option) => (
+            {filterOptions.map((option) => (
               <SelectItem key={option.value} value={option.value}>
                 {option.label}
               </SelectItem>
