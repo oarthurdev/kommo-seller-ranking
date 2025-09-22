@@ -2264,12 +2264,10 @@ export async function getLostLeadsByStage(
   endDate?: string,
   allPipelines: boolean = false,
 ) {
-  // Buscar filtro para lost_leads_funnel
   let lostLeadsFilter;
   let currentPeriodStartUTC: Date, currentPeriodEndUTC: Date;
 
   if (startDate && endDate) {
-    // Garantir que são objetos Date válidos
     currentPeriodStartUTC =
       typeof startDate === "string" ? new Date(startDate) : startDate;
     currentPeriodEndUTC =
@@ -2312,53 +2310,44 @@ export async function getLostLeadsByStage(
       return {};
     }
 
-    // Buscar todas as etapas/stages da empresa
-    const { data: stagesList, error: stagesError } = await supabase
+    // Buscar nome do stage perdido (stage_id = 143)
+    const { data: stageRow, error: stageError } = await supabase
       .from("stages_list")
-      .select("stage_id, stage_name, pipeline_id")
+      .select("stage_name")
       .eq("company_id", companyId)
-      .in("pipeline_id", availablePipelineIds);
+      .eq("stage_id", 143)
+      .single();
 
-    if (stagesError) {
-      console.error("Erro ao buscar stages:", stagesError);
+    if (stageError || !stageRow) {
+      console.error("Erro ao buscar stage_name perdido:", stageError);
       return {};
     }
 
-    console.log(`Encontradas ${stagesList?.length || 0} etapas na empresa`);
+    const lostStageName = stageRow.stage_name;
 
-    // Criar mapa de stage_name para facilitar busca
-    const stageNameToId = new Map<string, number>();
-    stagesList?.forEach((stage) => {
-      stageNameToId.set(stage.stage_name, stage.stage_id);
-    });
-
-    // Buscar leads perdidos (status_id = 143) no período
+    // Buscar leads no período (sem status_id)
     let leadsQuery = supabase
       .from("leads")
       .select(
-        "id, custom_fields_values, valor, criado_em, atualizado_em, pipeline_id",
+        "id, custom_fields_values, valor, atualizado_em, pipeline_id, responsavel_id",
       )
       .eq("company_id", companyId)
-      .eq("status_id", 143)
       .in("pipeline_id", availablePipelineIds)
       .gte("atualizado_em", currentPeriodStartUTC.toISOString())
       .lte("atualizado_em", currentPeriodEndUTC.toISOString());
 
-    // Se um corretor específico foi fornecido, filtrar por ele
     if (brokerId) {
       leadsQuery = leadsQuery.eq("responsavel_id", parseInt(brokerId));
     }
 
-    const { data: lostLeads, error: leadsError } = await leadsQuery;
+    const { data: leads, error: leadsError } = await leadsQuery;
 
     if (leadsError) {
-      console.error("Erro ao buscar leads perdidos:", leadsError);
+      console.error("Erro ao buscar leads:", leadsError);
       return {};
     }
 
-    console.log(
-      `Encontrados ${lostLeads?.length || 0} leads perdidos no período`,
-    );
+    console.log(`Encontrados ${leads?.length || 0} leads no período`);
 
     const lostByPreviousStage: {
       [stage: string]: {
@@ -2366,147 +2355,94 @@ export async function getLostLeadsByStage(
         totalValue: number;
         color: string;
         pipeline_id: number;
-        stage_id: number;
       };
     } = {};
 
     let colorIndex = 0;
 
-    // Processar cada lead perdido
-    for (const lead of lostLeads || []) {
+    for (const lead of leads || []) {
       try {
-        if (!lead.custom_fields_values) {
-          console.log(`Lead ${lead.id} sem custom_fields_values`);
-          continue;
-        }
+        if (!lead.custom_fields_values) continue;
 
-        let customFields;
+        let customFields: any[];
 
-        // Se é string, tentar fazer parse
+        // Parse do JSON armazenado como string
         if (typeof lead.custom_fields_values === "string") {
-          try {
-            let jsonString = lead.custom_fields_values.trim();
+          let jsonString = lead.custom_fields_values
+            .replace(/'/g, '"')
+            .replace(/\bNone\b/g, "null")
+            .replace(/\bTrue\b/g, "true")
+            .replace(/\bFalse\b/g, "false");
 
-            // Se não começar com '[' ou '{', pode ser uma string malformada
-            if (!jsonString.startsWith("[") && !jsonString.startsWith("{")) {
-              console.log(
-                `Lead ${lead.id} com custom_fields_values malformado: não é JSON válido`,
-              );
-              continue;
-            }
-
-            // Converter formato Python-like para JSON válido
-            // Substituir aspas simples por aspas duplas
-            jsonString = jsonString.replace(/'/g, '"');
-
-            // Substituir None por null
-            jsonString = jsonString.replace(/\bNone\b/g, "null");
-
-            // Substituir True por true
-            jsonString = jsonString.replace(/\bTrue\b/g, "true");
-
-            // Substituir False por false
-            jsonString = jsonString.replace(/\bFalse\b/g, "false");
-
-            customFields = JSON.parse(jsonString);
-          } catch (jsonError) {
-            console.log(
-              `Lead ${lead.id} erro ao fazer parse do JSON após conversão:`,
-              jsonError.message,
-            );
-            console.log(
-              `Valor problemático original:`,
-              lead.custom_fields_values?.substring(0, 200),
-            );
-            continue;
-          }
+          customFields = JSON.parse(jsonString);
         } else {
-          // Se já é objeto, usar diretamente
           customFields = lead.custom_fields_values;
         }
 
-        // Verificar se é array válido
-        if (!customFields || !Array.isArray(customFields)) {
-          console.log(
-            `Lead ${lead.id} com custom_fields_values inválido - não é array`,
-          );
-          continue;
+        if (!Array.isArray(customFields)) continue;
+
+        // Verificar se tem campo "Perdidos" = true
+        const isLost = customFields.some(
+          (f) =>
+            f.field_name === "Perdidos" &&
+            Array.isArray(f.values) &&
+            f.values.some((v: any) => v.value === true),
+        );
+        if (!isLost) continue;
+
+        // Encontrar índice do campo perdido (stage_id 143)
+        const lostIndex = customFields.findIndex(
+          (f) => f.field_name === lostStageName,
+        );
+        if (lostIndex <= 0) continue;
+
+        const stageNamesSet = new Set(
+          stagesList?.map((s) => s.stage_name) || [],
+        );
+
+        // Etapa anterior = campo imediatamente anterior
+        // Etapa anterior = campo imediatamente anterior
+        const prevField = customFields[lostIndex - 1];
+        if (!prevField?.field_name) continue;
+
+        // Validar se é realmente um stage da empresa
+        if (!stageNamesSet.has(prevField.field_name)) {
+          continue; // ignora se não for etapa válida
         }
 
-        // Encontrar campos que têm value: true e correspondem a stage_names
-        const activeStageFields = customFields.filter((field) => {
-          if (
-            !field.field_name ||
-            !field.values ||
-            !Array.isArray(field.values)
-          ) {
-            return false;
-          }
+        const prevStage = prevField.field_name;
 
-          // Verificar se tem value: true
-          const hasTrue = field.values.some((val) => val.value === true);
-          if (!hasTrue) {
-            return false;
-          }
+        if (!lostByPreviousStage[prevStage]) {
+          const assignedColor =
+            LOST_LEADS_STAGE_COLORS[
+              colorIndex % LOST_LEADS_STAGE_COLORS.length
+            ];
+          colorIndex++;
 
-          // Verificar se o field_name corresponde a algum stage_name
-          return stageNameToId.has(field.field_name);
-        });
-
-        if (activeStageFields.length === 0) {
-          console.log(`Lead ${lead.id} sem etapas ativas nos custom fields`);
-          continue;
+          lostByPreviousStage[prevStage] = {
+            count: 0,
+            totalValue: 0,
+            color: assignedColor,
+            pipeline_id: lead.pipeline_id,
+          };
         }
 
-        // Buscar a etapa "perdido" (status 143) para saber qual pipeline
-        const lostStage = stagesList?.find((stage) => stage.stage_id === 143);
+        lostByPreviousStage[prevStage].count++;
 
-        // Para cada campo ativo que corresponde a uma etapa
-        for (const activeField of activeStageFields) {
-          const stageName = activeField.field_name;
-          const stageId = stageNameToId.get(stageName);
+        const valor =
+          typeof lead.valor === "number"
+            ? lead.valor
+            : parseFloat(lead.valor?.toString() || "0") || 0;
 
-          // Não contar se é a própria etapa "perdido"
-          if (stageId === 143) {
-            continue;
-          }
+        lostByPreviousStage[prevStage].totalValue += valor;
 
-          if (!lostByPreviousStage[stageName]) {
-            // Usar cores distintas baseadas no índice
-            const assignedColor =
-              LOST_LEADS_STAGE_COLORS[
-                colorIndex % LOST_LEADS_STAGE_COLORS.length
-              ];
-            colorIndex++;
-
-            lostByPreviousStage[stageName] = {
-              count: 0,
-              totalValue: 0,
-              color: assignedColor,
-              pipeline_id: lead.pipeline_id,
-              stage_id: stageId || 0,
-            };
-          }
-
-          lostByPreviousStage[stageName].count++;
-
-          // Somar valor se existir
-          const valor =
-            typeof lead.valor === "number"
-              ? lead.valor
-              : parseFloat(lead.valor?.toString() || "0") || 0;
-          lostByPreviousStage[stageName].totalValue += valor;
-
-          console.log(
-            `Lead ${lead.id} perdido da etapa: ${stageName} (Stage ID: ${stageId})`,
-          );
-        }
-      } catch (parseError) {
-        console.error(`Erro ao processar lead ${lead.id}:`, parseError);
+        console.log(`Lead ${lead.id} perdido da etapa anterior: ${prevStage}`);
+      } catch (err) {
+        console.error(`Erro ao processar lead ${lead.id}:`, err);
       }
     }
 
-    console.log(`Resultado final leads perdidos:`, lostByPreviousStage);
+    console.log("Resultado final leads perdidos:", lostByPreviousStage);
     return lostByPreviousStage;
   } catch (error) {
     console.error("Erro ao buscar leads perdidos por etapa anterior:", error);
