@@ -2234,203 +2234,172 @@ export async function getLostLeadsByStage(
   }
 
   try {
-    // Buscar configuração do Kommo para API
-    const { data: kommoConfig, error: kommoError } = await supabase
+    console.log(
+      `Buscando leads perdidos no período: ${currentPeriodStartUTC.toISOString()} até ${currentPeriodEndUTC.toISOString()}`,
+    );
+
+    // Buscar configuração dos pipelines
+    const { data: configData, error: configError } = await supabase
       .schema("cf_kommo")
       .from("kommo_config")
-      .select("api_url, access_token")
+      .select("pipeline_id")
       .eq("company_id", companyId)
       .single();
 
-    if (kommoError || !kommoConfig?.api_url || !kommoConfig?.access_token) {
-      console.error("Erro ao buscar configuração do Kommo:", kommoError);
+    if (configError || !configData?.pipeline_id) {
+      console.error("Erro ao buscar configuração dos pipelines:", configError);
       return {};
     }
 
-    // Buscar atividades diretamente da tabela activities
-    let activitiesQuery = supabase
-      .from("activities")
-      .select("id, valor_novo, valor_anterior, criado_em, user_id, lead_id")
+    const availablePipelineIds = getPipelineIds(configData);
+
+    if (availablePipelineIds.length === 0) {
+      console.error("Nenhum pipeline disponível encontrado");
+      return {};
+    }
+
+    // Buscar todas as etapas/stages da empresa
+    const { data: stagesList, error: stagesError } = await supabase
+      .from("stages_list")
+      .select("stage_id, stage_name, pipeline_id")
       .eq("company_id", companyId)
-      .eq("tipo", "mudança_status")
-      .gte("criado_em", currentPeriodStartUTC.toISOString())
-      .lte("criado_em", currentPeriodEndUTC.toISOString());
+      .in("pipeline_id", availablePipelineIds);
+
+    if (stagesError) {
+      console.error("Erro ao buscar stages:", stagesError);
+      return {};
+    }
+
+    console.log(`Encontradas ${stagesList?.length || 0} etapas na empresa`);
+
+    // Criar mapa de stage_name para facilitar busca
+    const stageNameToId = new Map<string, number>();
+    stagesList?.forEach((stage) => {
+      stageNameToId.set(stage.stage_name, stage.stage_id);
+    });
+
+    // Buscar leads perdidos (status_id = 143) no período
+    let leadsQuery = supabase
+      .from("leads")
+      .select("id, custom_fields_values, valor, criado_em, atualizado_em, pipeline_id")
+      .eq("company_id", companyId)
+      .eq("status_id", 143)
+      .in("pipeline_id", availablePipelineIds)
+      .gte("atualizado_em", currentPeriodStartUTC.toISOString())
+      .lte("atualizado_em", currentPeriodEndUTC.toISOString());
 
     // Se um corretor específico foi fornecido, filtrar por ele
     if (brokerId) {
-      activitiesQuery = activitiesQuery.eq("user_id", brokerId);
+      leadsQuery = leadsQuery.eq("responsavel_id", parseInt(brokerId));
     }
 
-    const { data: activities, error } = await activitiesQuery;
+    const { data: lostLeads, error: leadsError } = await leadsQuery;
 
-    if (error) {
-      console.error("Erro ao buscar atividades:", error);
+    if (leadsError) {
+      console.error("Erro ao buscar leads perdidos:", leadsError);
       return {};
     }
 
     console.log(
-      `Encontradas ${activities?.length || 0} atividades de leads perdidos para o corretor ${brokerId}`,
+      `Encontrados ${lostLeads?.length || 0} leads perdidos no período`,
     );
 
-    // Mapear status anteriores únicos por pipeline
-    const statusesPorPipeline = new Map<number, Set<number>>();
     const lostByPreviousStage: {
       [stage: string]: {
         count: number;
         totalValue: number;
         color: string;
         pipeline_id: number;
-        status_id: number;
+        stage_id: number;
       };
     } = {};
 
-    for (const activity of activities || []) {
-      try {
-        // Parse do valor_novo para verificar se é realmente status 143
-        let valorNovo;
-        if (typeof activity.valor_novo === "string") {
-          valorNovo = JSON.parse(activity.valor_novo);
-        } else {
-          valorNovo = activity.valor_novo;
-        }
-
-        // Verificar se é uma mudança para status perdido (143)
-        const leadStatusNovo = valorNovo?.[0]?.lead_status;
-        if (!leadStatusNovo || leadStatusNovo.id !== 143) {
-          continue;
-        }
-
-        const pipelineId = leadStatusNovo.pipeline_id;
-
-        // Parse do valor_anterior para obter o status anterior
-        let valorAnterior;
-        if (activity.valor_anterior) {
-          if (typeof activity.valor_anterior === "string") {
-            valorAnterior = JSON.parse(activity.valor_anterior);
-          } else {
-            valorAnterior = activity.valor_anterior;
-          }
-
-          const leadStatusAnterior = valorAnterior?.[0]?.lead_status;
-          if (
-            leadStatusAnterior &&
-            leadStatusAnterior.id &&
-            leadStatusAnterior.id !== 143
-          ) {
-            const previousStatusId = leadStatusAnterior.id;
-
-            // Mapear status por pipeline para buscar nomes depois
-            if (!statusesPorPipeline.has(pipelineId)) {
-              statusesPorPipeline.set(pipelineId, new Set());
-            }
-            statusesPorPipeline.get(pipelineId)!.add(previousStatusId);
-          }
-        }
-      } catch (parseError) {
-        console.error("Erro ao analisar atividade:", parseError, activity);
-      }
-    }
-
-    // Buscar nomes dos status da API do Kommo
-    const statusNamesMap = new Map<string, string>();
-
-    for (const [pipelineId, statusIds] of statusesPorPipeline) {
-      try {
-        await eventsRateLimiter.removeTokens(1);
-
-        const pipelineUrl = `${kommoConfig.api_url}/leads/pipelines/${pipelineId}`;
-        const response = await fetch(pipelineUrl, {
-          headers: {
-            Authorization: `Bearer ${kommoConfig.access_token}`,
-            "Content-Type": "application/json",
-          },
-          timeout: 10000,
-        });
-
-        if (response.ok) {
-          const pipelineData = await response.json();
-          const statuses = pipelineData._embedded?.statuses || [];
-
-          for (const status of statuses) {
-            const statusKey = `${pipelineId}-${status.id}`;
-            statusNamesMap.set(statusKey, status.name || `Status ${status.id}`);
-          }
-        }
-      } catch (apiError) {
-        console.error(`Erro ao buscar pipeline ${pipelineId}:`, apiError);
-      }
-    }
-
-    // Processar atividades novamente para contar e agrupar por nome do status
     let colorIndex = 0;
 
-    for (const activity of activities || []) {
+    // Processar cada lead perdido
+    for (const lead of lostLeads || []) {
       try {
-        // Parse do valor_novo para verificar se é realmente status 143
-        let valorNovo;
-        if (typeof activity.valor_novo === "string") {
-          valorNovo = JSON.parse(activity.valor_novo);
-        } else {
-          valorNovo = activity.valor_novo;
-        }
-
-        // Verificar se é uma mudança para status perdido (143)
-        const leadStatusNovo = valorNovo?.[0]?.lead_status;
-        if (!leadStatusNovo || leadStatusNovo.id !== 143) {
+        if (!lead.custom_fields_values) {
+          console.log(`Lead ${lead.id} sem custom_fields_values`);
           continue;
         }
 
-        const pipelineId = leadStatusNovo.pipeline_id;
+        let customFields;
+        if (typeof lead.custom_fields_values === "string") {
+          customFields = JSON.parse(lead.custom_fields_values);
+        } else {
+          customFields = lead.custom_fields_values;
+        }
 
-        // Parse do valor_anterior para obter o status anterior
-        let valorAnterior;
-        if (activity.valor_anterior) {
-          if (typeof activity.valor_anterior === "string") {
-            valorAnterior = JSON.parse(activity.valor_anterior);
-          } else {
-            valorAnterior = activity.valor_anterior;
+        if (!Array.isArray(customFields)) {
+          console.log(`Lead ${lead.id} com custom_fields_values inválido`);
+          continue;
+        }
+
+        // Encontrar campos que têm value: true e correspondem a stage_names
+        const activeStageFields = customFields.filter((field) => {
+          if (!field.field_name || !field.values || !Array.isArray(field.values)) {
+            return false;
           }
 
-          const leadStatusAnterior = valorAnterior?.[0]?.lead_status;
-          if (
-            leadStatusAnterior &&
-            leadStatusAnterior.id &&
-            leadStatusAnterior.id !== 143
-          ) {
-            const previousStatusId = leadStatusAnterior.id;
-            const statusKey = `${pipelineId}-${previousStatusId}`;
-
-            // Buscar nome do status ou usar fallback
-            const statusName =
-              statusNamesMap.get(statusKey) || `Status ${previousStatusId}`;
-            const stageName = `${statusName}`;
-
-            if (!lostByPreviousStage[stageName]) {
-              // Usar cores distintas baseadas no índice
-              const assignedColor =
-                LOST_LEADS_STAGE_COLORS[
-                  colorIndex % LOST_LEADS_STAGE_COLORS.length
-                ];
-              colorIndex++;
-
-              lostByPreviousStage[stageName] = {
-                count: 0,
-                totalValue: 0,
-                color: assignedColor,
-                pipeline_id: pipelineId,
-                status_id: previousStatusId,
-              };
-            }
-
-            lostByPreviousStage[stageName].count++;
-
-            console.log(
-              `Lead perdido encontrado: ${stageName} (Status ID: ${previousStatusId})`,
-            );
+          // Verificar se tem value: true
+          const hasTrue = field.values.some((val) => val.value === true);
+          if (!hasTrue) {
+            return false;
           }
+
+          // Verificar se o field_name corresponde a algum stage_name
+          return stageNameToId.has(field.field_name);
+        });
+
+        if (activeStageFields.length === 0) {
+          console.log(`Lead ${lead.id} sem etapas ativas nos custom fields`);
+          continue;
+        }
+
+        // Buscar a etapa "perdido" (status 143) para saber qual pipeline
+        const lostStage = stagesList?.find((stage) => stage.stage_id === 143);
+        
+        // Para cada campo ativo que corresponde a uma etapa
+        for (const activeField of activeStageFields) {
+          const stageName = activeField.field_name;
+          const stageId = stageNameToId.get(stageName);
+
+          // Não contar se é a própria etapa "perdido"
+          if (stageId === 143) {
+            continue;
+          }
+
+          if (!lostByPreviousStage[stageName]) {
+            // Usar cores distintas baseadas no índice
+            const assignedColor =
+              LOST_LEADS_STAGE_COLORS[
+                colorIndex % LOST_LEADS_STAGE_COLORS.length
+              ];
+            colorIndex++;
+
+            lostByPreviousStage[stageName] = {
+              count: 0,
+              totalValue: 0,
+              color: assignedColor,
+              pipeline_id: lead.pipeline_id,
+              stage_id: stageId || 0,
+            };
+          }
+
+          lostByPreviousStage[stageName].count++;
+
+          // Somar valor se existir
+          const valor = typeof lead.valor === "number" ? lead.valor : 
+                       parseFloat(lead.valor?.toString() || "0") || 0;
+          lostByPreviousStage[stageName].totalValue += valor;
+
+          console.log(
+            `Lead ${lead.id} perdido da etapa: ${stageName} (Stage ID: ${stageId})`,
+          );
         }
       } catch (parseError) {
-        console.error("Erro ao analisar atividade:", parseError, activity);
+        console.error(`Erro ao processar lead ${lead.id}:`, parseError);
       }
     }
 
