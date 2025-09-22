@@ -1135,28 +1135,44 @@ export async function getActivityHeatmap(
     if (startDate && endDate) {
       // Validar e criar datas de forma mais robusta
       try {
-        // Verificar se as datas são strings válidas no formato YYYY-MM-DD
+        let startLocal: Date, endLocal: Date;
+        
         if (typeof startDate === 'string' && typeof endDate === 'string') {
-          // Criar datas locais primeiro (assumindo que já estão em GMT-3)
-          const startLocal = new Date(startDate + "T00:00:00");
-          const endLocal = new Date(endDate + "T23:59:59");
-          
-          // Verificar se as datas são válidas
-          if (isNaN(startLocal.getTime()) || isNaN(endLocal.getTime())) {
-            throw new Error("Datas fornecidas são inválidas");
+          // Tentar diferentes formatos de data
+          if (startDate.includes('T')) {
+            // Se já contém horário, usar diretamente
+            startLocal = new Date(startDate);
+            endLocal = new Date(endDate);
+          } else {
+            // Se é apenas data (YYYY-MM-DD), adicionar horário
+            startLocal = new Date(startDate + "T00:00:00.000Z");
+            endLocal = new Date(endDate + "T23:59:59.999Z");
           }
-          
-          periodStart = startLocal;
-          periodEnd = endLocal;
         } else {
-          throw new Error("Datas devem ser strings no formato YYYY-MM-DD");
+          // Se não são strings, tentar converter diretamente
+          startLocal = new Date(startDate);
+          endLocal = new Date(endDate);
         }
+        
+        // Verificar se as datas são válidas
+        if (!isValidDate(startLocal) || !isValidDate(endLocal)) {
+          throw new Error(`Datas inválidas: ${startDate} -> ${startLocal}, ${endDate} -> ${endLocal}`);
+        }
+        
+        periodStart = startLocal;
+        periodEnd = endLocal;
+        
+        console.log(`Datas customizadas processadas com sucesso: ${periodStart.toISOString()} até ${periodEnd.toISOString()}`);
       } catch (error) {
         console.error("Erro ao processar datas customizadas:", error);
+        console.log(`Dados recebidos: startDate=${startDate}, endDate=${endDate}`);
+        
         // Fallback para mês atual
         const now = new Date();
         periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
         periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        
+        console.log(`Usando fallback: ${periodStart.toISOString()} até ${periodEnd.toISOString()}`);
       }
     } else {
       // Buscar filtro salvo para 'broker_heatmap'
