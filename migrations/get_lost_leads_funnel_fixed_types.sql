@@ -1,5 +1,5 @@
--- Função corrigida get_lost_leads_funnel com schema real
--- Esta versão usa as colunas corretas das tabelas activities e stages_list
+-- Função corrigida get_lost_leads_funnel com tipos corretos
+-- Corrige o erro 42804 ajustando o tipo de retorno para character varying
 
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_company_id UUID,
@@ -10,7 +10,7 @@ CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_pipeline_ids BIGINT[] DEFAULT NULL
 ) 
 RETURNS TABLE(
-    etapa_anterior TEXT,
+    etapa_anterior CHARACTER VARYING,  -- Mudado de TEXT para CHARACTER VARYING
     total INTEGER,
     total_value NUMERIC
 ) 
