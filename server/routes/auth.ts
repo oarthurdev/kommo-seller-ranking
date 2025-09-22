@@ -1,4 +1,3 @@
-
 import { Request, Response } from "express";
 import { supabase } from "../supabase";
 
@@ -38,9 +37,8 @@ export async function loginAuth(req: Request, res: Response) {
     res.json({
       success: true,
       expire_at: authConfig.expire_at,
-      message: "Autenticação realizada com sucesso"
+      message: "Autenticação realizada com sucesso",
     });
-
   } catch (error) {
     console.error("Erro na autenticação:", error);
     res.status(500).json({ message: "Erro interno do servidor" });
@@ -63,7 +61,9 @@ export async function checkAuthStatus(req: Request, res: Response) {
       .single();
 
     if (error || !authConfig) {
-      return res.status(404).json({ message: "Configuração de autenticação não encontrada" });
+      return res
+        .status(404)
+        .json({ message: "Configuração de autenticação não encontrada" });
     }
 
     // Verificar se não expirou
@@ -72,9 +72,8 @@ export async function checkAuthStatus(req: Request, res: Response) {
 
     res.json({
       expired: now > expireAt,
-      expire_at: authConfig.expire_at
+      expire_at: authConfig.expire_at,
     });
-
   } catch (error) {
     console.error("Erro ao verificar status de autenticação:", error);
     res.status(500).json({ message: "Erro interno do servidor" });

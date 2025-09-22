@@ -1026,7 +1026,15 @@ export async function getBrokerLeadEtapaCounts(
     } = {};
 
     data?.forEach((lead) => {
-      const etapa = lead.etapa || "Sem etapa";
+      let etapa = lead.etapa || "Sem etapa";
+
+      if (
+        (lead.status_id === 142 || lead.status_id === 143) &&
+        etapa.includes("(")
+      ) {
+        etapa = etapa.replace(/\s*\(.*?\)\s*$/, "").trim(); // Remove pipeline entre parênteses no final
+      }
+
       const valor = typeof lead.valor === "number" ? lead.valor : 0;
 
       if (!etapaCounts[etapa]) {
