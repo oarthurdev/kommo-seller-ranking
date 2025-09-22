@@ -2325,42 +2325,25 @@ export async function getLostLeadsByStage(
 
     const lostStageName = stageRow.stage_name;
 
-    // Buscar lista de estágios da empresa para validação
-    const { data: stagesList, error: stagesError } = await supabase
-      .from("stages_list")
-      .select("stage_name")
-      .eq("company_id", companyId)
-      .in("pipeline_id", availablePipelineIds);
+    // Usar a função RPC para buscar leads perdidos por etapa anterior
+    const { data: rpcResult, error: rpcError } = await supabase
+      .rpc("get_lost_leads_funnel", {
+        p_company_id: companyId,
+        p_start: currentPeriodStartUTC.toISOString(),
+        p_end: currentPeriodEndUTC.toISOString(),
+        p_stage_name: lostStageName,
+        p_broker_id: brokerId ? parseInt(brokerId) : null,
+        p_pipeline_ids: availablePipelineIds,
+      });
 
-    if (stagesError) {
-      console.error("Erro ao buscar lista de estágios:", stagesError);
+    if (rpcError) {
+      console.error("Erro ao executar RPC get_lost_leads_funnel:", rpcError);
       return {};
     }
 
-    // Buscar leads no período (sem status_id)
-    let leadsQuery = supabase
-      .from("leads")
-      .select(
-        "id, custom_fields_values, valor, atualizado_em, pipeline_id, responsavel_id",
-      )
-      .eq("company_id", companyId)
-      .in("pipeline_id", availablePipelineIds)
-      .gte("atualizado_em", currentPeriodStartUTC.toISOString())
-      .lte("atualizado_em", currentPeriodEndUTC.toISOString());
+    console.log(`RPC retornou ${rpcResult?.length || 0} etapas com leads perdidos`);
 
-    if (brokerId) {
-      leadsQuery = leadsQuery.eq("responsavel_id", parseInt(brokerId));
-    }
-
-    const { data: leads, error: leadsError } = await leadsQuery;
-
-    if (leadsError) {
-      console.error("Erro ao buscar leads:", leadsError);
-      return {};
-    }
-
-    console.log(`Encontrados ${leads?.length || 0} leads no período`);
-
+    // Processar resultado da RPC
     const lostByPreviousStage: {
       [stage: string]: {
         count: number;
@@ -2372,85 +2355,26 @@ export async function getLostLeadsByStage(
 
     let colorIndex = 0;
 
-    for (const lead of leads || []) {
-      try {
-        if (!lead.custom_fields_values) continue;
+    if (rpcResult && Array.isArray(rpcResult)) {
+      for (const row of rpcResult) {
+        if (!row.etapa_anterior || row.total <= 0) continue;
 
-        let customFields: any[];
+        const assignedColor =
+          LOST_LEADS_STAGE_COLORS[
+            colorIndex % LOST_LEADS_STAGE_COLORS.length
+          ];
+        colorIndex++;
 
-        // Parse do JSON armazenado como string
-        if (typeof lead.custom_fields_values === "string") {
-          let jsonString = lead.custom_fields_values
-            .replace(/'/g, '"')
-            .replace(/\bNone\b/g, "null")
-            .replace(/\bTrue\b/g, "true")
-            .replace(/\bFalse\b/g, "false");
+        lostByPreviousStage[row.etapa_anterior] = {
+          count: row.total,
+          totalValue: row.total_value || 0,
+          color: assignedColor,
+          pipeline_id: availablePipelineIds[0], // Usar primeiro pipeline como padrão
+        };
 
-          customFields = JSON.parse(jsonString);
-        } else {
-          customFields = lead.custom_fields_values;
-        }
-
-        if (!Array.isArray(customFields)) continue;
-
-        // Verificar se tem campo "Perdidos" = true
-        const isLost = customFields.some(
-          (f) =>
-            f.field_name === "Perdidos" &&
-            Array.isArray(f.values) &&
-            f.values.some((v: any) => v.value === true),
+        console.log(
+          `Etapa anterior: ${row.etapa_anterior}, Total: ${row.total}`,
         );
-        if (!isLost) continue;
-
-        // Encontrar índice do campo perdido (stage_id 143)
-        const lostIndex = customFields.findIndex(
-          (f) => f.field_name === lostStageName,
-        );
-        if (lostIndex <= 0) continue;
-
-        const stageNamesSet = new Set(
-          stagesList?.map((s) => s.stage_name) || [],
-        );
-
-        // Etapa anterior = campo imediatamente anterior
-        // Etapa anterior = campo imediatamente anterior
-        const prevField = customFields[lostIndex - 1];
-        if (!prevField?.field_name) continue;
-
-        // Validar se é realmente um stage da empresa
-        if (!stageNamesSet.has(prevField.field_name)) {
-          continue; // ignora se não for etapa válida
-        }
-
-        const prevStage = prevField.field_name;
-
-        if (!lostByPreviousStage[prevStage]) {
-          const assignedColor =
-            LOST_LEADS_STAGE_COLORS[
-              colorIndex % LOST_LEADS_STAGE_COLORS.length
-            ];
-          colorIndex++;
-
-          lostByPreviousStage[prevStage] = {
-            count: 0,
-            totalValue: 0,
-            color: assignedColor,
-            pipeline_id: lead.pipeline_id,
-          };
-        }
-
-        lostByPreviousStage[prevStage].count++;
-
-        const valor =
-          typeof lead.valor === "number"
-            ? lead.valor
-            : parseFloat(lead.valor?.toString() || "0") || 0;
-
-        lostByPreviousStage[prevStage].totalValue += valor;
-
-        console.log(`Lead ${lead.id} perdido da etapa anterior: ${prevStage}`);
-      } catch (err) {
-        console.error(`Erro ao processar lead ${lead.id}:`, err);
       }
     }
 
