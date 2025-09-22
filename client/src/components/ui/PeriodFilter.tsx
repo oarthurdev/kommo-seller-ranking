@@ -50,7 +50,7 @@ export function PeriodFilter({
   const [endDate, setEndDate] = useState("");
   const [isLoading, setIsLoading] = useState(false);
 
-  // Definir opções específicas para o heatmap
+  // Definir opções específicas para o heatmap (removido "mês passado")
   const heatmapFilterOptions = [
     { value: "7_days", label: "Últimos 7 dias" },
     { value: "30_days", label: "Últimos 30 dias" },

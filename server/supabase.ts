@@ -1077,6 +1077,12 @@ export async function getBrokerActivities(id: number, companyId: number) {
   return data;
 }
 
+// Função para converter UTC para GMT-3 (horário de Brasília)
+function convertToGMT3(utcDate: Date): Date {
+  const gmt3Date = new Date(utcDate.getTime() - (3 * 60 * 60 * 1000));
+  return gmt3Date;
+}
+
 // Função para gerar heatmap de atividades
 export async function getActivityHeatmap(
   brokerId: number,
@@ -1118,15 +1124,13 @@ export async function getActivityHeatmap(
     const pipelineInfo = getPipelinesInfo(config);
     const pipelineIdMap = new Map(pipelineInfo.map((p) => [p.id, p]));
 
-    // Determinar o período de análise
+    // Determinar o período de análise (ajustado para GMT-3)
     let periodStart: Date, periodEnd: Date;
 
     if (startDate && endDate) {
-      periodStart = new Date(startDate);
-      periodEnd = new Date(endDate);
-      // Ajustar para início e fim do dia se não forem especificados
-      periodStart.setHours(0, 0, 0, 0);
-      periodEnd.setHours(23, 59, 59, 999);
+      // Criar datas em GMT-3
+      periodStart = new Date(startDate + "T00:00:00.000-03:00");
+      periodEnd = new Date(endDate + "T23:59:59.999-03:00");
     } else {
       // Buscar filtro salvo para 'broker_heatmap'
       const heatmapFilter = await getComponentFilter(
@@ -1147,7 +1151,7 @@ export async function getActivityHeatmap(
         filterType = "current_month"; // Default para mês atual
       }
 
-      const period = getDateRange(
+      const period = getDateRangeBrazil(
         filterType,
         customStartDate,
         customEndDate,
@@ -1190,17 +1194,19 @@ export async function getActivityHeatmap(
     const mensagensRecebidasData = Array(7).fill(0).map(() => Array(19).fill(0));
     const mensagensEnviadasData = Array(7).fill(0).map(() => Array(19).fill(0));
 
-    // Função para obter o índice do dia (0=Segunda, 6=Domingo)
-    const getDayIndex = (date: Date) => {
-      const day = date.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
+    // Função para obter o índice do dia (0=Segunda, 6=Domingo) considerando GMT-3
+    const getDayIndex = (utcDate: Date) => {
+      const brazilDate = convertToGMT3(utcDate);
+      const day = brazilDate.getDay(); // 0 = Domingo, 1 = Segunda, ..., 6 = Sábado
       // Mapear para: 0=Segunda, 1=Terça, ..., 5=Sábado, 6=Domingo
       return day === 0 ? 6 : day - 1;
     };
 
-    // Função para obter o índice do horário
-    const getTimeIndex = (date: Date) => {
-      const hour = date.getHours();
-      const minute = date.getMinutes();
+    // Função para obter o índice do horário considerando GMT-3
+    const getTimeIndex = (utcDate: Date) => {
+      const brazilDate = convertToGMT3(utcDate);
+      const hour = brazilDate.getHours();
+      const minute = brazilDate.getMinutes();
 
       // Manhã: 8:00-12:00 (slots 0-8)
       if (hour >= 8 && hour < 12) {
@@ -3365,7 +3371,244 @@ function isValidDate(d: any) {
   return !isNaN(d.getTime()) && d.getTime() > 0;
 }
 
-// Função para obter range de datas baseado no tipo de filtro
+// Função para obter range de datas baseado no tipo de filtro em GMT-3
+export function getDateRangeBrazil(
+  filterType: string,
+  startDate?: string,
+  endDate?: string,
+  month?: string | number,
+  year?: string | number,
+): { start: Date; end: Date; startFormatted: string; endFormatted: string } {
+  // Criar data atual no fuso GMT-3
+  const nowUTC = new Date();
+  const now = new Date(nowUTC.getTime() - (3 * 60 * 60 * 1000)); // GMT-3
+
+  const formatDateForDB = (date: Date): string => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const d = String(date.getDate()).padStart(2, "0");
+    const hh = String(date.getHours()).padStart(2, "0");
+    const mm = String(date.getMinutes()).padStart(2, "0");
+    const ss = String(date.getSeconds()).padStart(2, "0");
+    return `${y}-${m}-${d} ${hh}:${mm}:${ss}`;
+  };
+
+  switch (filterType) {
+    case "month": {
+      const m = Number(month);
+      const y = Number(year);
+      const base =
+        !Number.isNaN(m) && m >= 1 && m <= 12 && !Number.isNaN(y)
+          ? new Date(y, m - 1, 1)
+          : new Date(now.getFullYear(), now.getMonth(), 1);
+
+      const start = new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        1,
+        0,
+        0,
+        0,
+        0,
+      );
+      const end = new Date(
+        base.getFullYear(),
+        base.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      // Converter para UTC considerando GMT-3
+      const startUTC = new Date(start.getTime() + (3 * 60 * 60 * 1000));
+      const endUTC = new Date(end.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: startUTC,
+        end: endUTC,
+        startFormatted: formatDateForDB(startUTC),
+        endFormatted: formatDateForDB(endUTC),
+      };
+    }
+    case "7_days":
+      const sevenDaysAgo = new Date(now);
+      sevenDaysAgo.setDate(now.getDate() - 7);
+      sevenDaysAgo.setHours(0, 0, 0, 0);
+
+      const nowEnd = new Date(now);
+      nowEnd.setHours(23, 59, 59, 999);
+
+      // Converter para UTC considerando GMT-3
+      const sevenDaysUTC = new Date(sevenDaysAgo.getTime() + (3 * 60 * 60 * 1000));
+      const nowEndUTC = new Date(nowEnd.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: sevenDaysUTC,
+        end: nowEndUTC,
+        startFormatted: formatDateForDB(sevenDaysUTC),
+        endFormatted: formatDateForDB(nowEndUTC),
+      };
+
+    case "30_days":
+      const thirtyDaysAgo = new Date(now);
+      thirtyDaysAgo.setDate(now.getDate() - 30);
+      thirtyDaysAgo.setHours(0, 0, 0, 0);
+
+      const thirtyDaysEnd = new Date(now);
+      thirtyDaysEnd.setHours(23, 59, 59, 999);
+
+      // Converter para UTC considerando GMT-3
+      const thirtyDaysUTC = new Date(thirtyDaysAgo.getTime() + (3 * 60 * 60 * 1000));
+      const thirtyDaysEndUTC = new Date(thirtyDaysEnd.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: thirtyDaysUTC,
+        end: thirtyDaysEndUTC,
+        startFormatted: formatDateForDB(thirtyDaysUTC),
+        endFormatted: formatDateForDB(thirtyDaysEndUTC),
+      };
+
+    case "current_week":
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      endOfWeek.setHours(23, 59, 59, 999);
+
+      // Converter para UTC considerando GMT-3
+      const startWeekUTC = new Date(startOfWeek.getTime() + (3 * 60 * 60 * 1000));
+      const endWeekUTC = new Date(endOfWeek.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: startWeekUTC,
+        end: endWeekUTC,
+        startFormatted: formatDateForDB(startWeekUTC),
+        endFormatted: formatDateForDB(endWeekUTC),
+      };
+
+    case "current_month":
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      startOfMonth.setHours(0, 0, 0, 0);
+      const endOfMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      // Converter para UTC considerando GMT-3
+      const startMonthUTC = new Date(startOfMonth.getTime() + (3 * 60 * 60 * 1000));
+      const endMonthUTC = new Date(endOfMonth.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: startMonthUTC,
+        end: endMonthUTC,
+        startFormatted: formatDateForDB(startMonthUTC),
+        endFormatted: formatDateForDB(endMonthUTC),
+      };
+
+    case "last_month":
+      const startOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth() - 1,
+        1,
+      );
+      startOfLastMonth.setHours(0, 0, 0, 0);
+      const endOfLastMonth = new Date(
+        now.getFullYear(),
+        now.getMonth(),
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      // Converter para UTC considerando GMT-3
+      const startLastMonthUTC = new Date(startOfLastMonth.getTime() + (3 * 60 * 60 * 1000));
+      const endLastMonthUTC = new Date(endOfLastMonth.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: startLastMonthUTC,
+        end: endLastMonthUTC,
+        startFormatted: formatDateForDB(startLastMonthUTC),
+        endFormatted: formatDateForDB(endLastMonthUTC),
+      };
+
+    case "custom_range":
+      if (startDate && endDate) {
+        // Para datas customizadas, assumir que já estão em GMT-3 e converter para UTC
+        const start = new Date(startDate + "T00:00:00.000-03:00");
+        const end = new Date(endDate + "T23:59:59.999-03:00");
+
+        return {
+          start,
+          end,
+          startFormatted: formatDateForDB(start),
+          endFormatted: formatDateForDB(end),
+        };
+      }
+      break;
+
+    default:
+      // Default para mês atual em GMT-3
+      const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      defaultStart.setHours(0, 0, 0, 0);
+      const defaultEnd = new Date(
+        now.getFullYear(),
+        now.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999,
+      );
+
+      // Converter para UTC considerando GMT-3
+      const defaultStartUTC = new Date(defaultStart.getTime() + (3 * 60 * 60 * 1000));
+      const defaultEndUTC = new Date(defaultEnd.getTime() + (3 * 60 * 60 * 1000));
+
+      return {
+        start: defaultStartUTC,
+        end: defaultEndUTC,
+        startFormatted: formatDateForDB(defaultStartUTC),
+        endFormatted: formatDateForDB(defaultEndUTC),
+      };
+  }
+
+  // Fallback para mês atual em GMT-3
+  const fallbackStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  fallbackStart.setHours(0, 0, 0, 0);
+  const fallbackEnd = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999,
+  );
+
+  // Converter para UTC considerando GMT-3
+  const fallbackStartUTC = new Date(fallbackStart.getTime() + (3 * 60 * 60 * 1000));
+  const fallbackEndUTC = new Date(fallbackEnd.getTime() + (3 * 60 * 60 * 1000));
+
+  return {
+    start: fallbackStartUTC,
+    end: fallbackEndUTC,
+    startFormatted: formatDateForDB(fallbackStartUTC),
+    endFormatted: formatDateForDB(fallbackEndUTC),
+  };
+}
+
+// Função para obter range de datas baseado no tipo de filtro (mantida para compatibilidade)
 export function getDateRange(
   filterType: string,
   startDate?: string,
