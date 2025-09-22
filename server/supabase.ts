@@ -2325,14 +2325,33 @@ export async function getLostLeadsByStage(
         }
 
         let customFields;
+        
+        // Se é string, tentar fazer parse
         if (typeof lead.custom_fields_values === "string") {
-          customFields = JSON.parse(lead.custom_fields_values);
+          try {
+            // Primeiro, verificar se a string é válida JSON
+            const trimmedValue = lead.custom_fields_values.trim();
+            
+            // Se não começar com '[' ou '{', pode ser uma string malformada
+            if (!trimmedValue.startsWith('[') && !trimmedValue.startsWith('{')) {
+              console.log(`Lead ${lead.id} com custom_fields_values malformado: não é JSON válido`);
+              continue;
+            }
+            
+            customFields = JSON.parse(trimmedValue);
+          } catch (jsonError) {
+            console.log(`Lead ${lead.id} erro ao fazer parse do JSON:`, jsonError.message);
+            console.log(`Valor problemático:`, lead.custom_fields_values?.substring(0, 100));
+            continue;
+          }
         } else {
+          // Se já é objeto, usar diretamente
           customFields = lead.custom_fields_values;
         }
 
-        if (!Array.isArray(customFields)) {
-          console.log(`Lead ${lead.id} com custom_fields_values inválido`);
+        // Verificar se é array válido
+        if (!customFields || !Array.isArray(customFields)) {
+          console.log(`Lead ${lead.id} com custom_fields_values inválido - não é array`);
           continue;
         }
 
