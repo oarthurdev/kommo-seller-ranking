@@ -53,6 +53,7 @@ model broker_points {
   updated_at         DateTime?  @default(now()) @db.Timestamp(6)
   company_id         String?    @db.Uuid
   leads_descartados  Int?       @default(0)
+  total_leads        Int?
   brokers            brokers    @relation(fields: [id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_bp_broker")
   companies          companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_bp_company")
 
@@ -73,7 +74,6 @@ model brokers {
   broker_points broker_points?
   companies     companies?     @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_brokers_company")
   leads         leads[]
-  sla_metrics   sla_metrics[]
 
   @@schema("public")
 }
@@ -85,6 +85,7 @@ model companies {
   created_at        DateTime?           @default(now()) @db.Timestamp(6)
   kommo_config      kommo_config[]
   activities        activities[]
+  auth_system       auth_system[]
   broker_points     broker_points[]
   brokers           brokers[]
   company_branding  company_branding?
@@ -94,7 +95,6 @@ model companies {
   dynamic_metrics   dynamic_metrics[]
   leads             leads[]
   metric_results    metric_results[]
-  sla_metrics       sla_metrics[]
   stages_list       stages_list[]
   sync_logs         sync_logs[]
 
@@ -236,22 +236,23 @@ model kommo_config {
 }
 
 model leads {
-  id             BigInt     @id
-  nome           String
-  responsavel_id BigInt?
-  contato_nome   String?
-  valor          Decimal?   @db.Decimal
-  status_id      BigInt?
-  pipeline_id    BigInt?
-  etapa          String?
-  criado_em      DateTime?  @db.Timestamp(6)
-  atualizado_em  DateTime?  @db.Timestamp(6)
-  fechado        Boolean?   @default(false)
-  status         String?
-  updated_at     DateTime?  @default(now()) @db.Timestamp(6)
-  company_id     String?    @db.Uuid
-  brokers        brokers?   @relation(fields: [responsavel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_broker")
-  companies      companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_company")
+  id                   BigInt     @id
+  nome                 String
+  responsavel_id       BigInt?
+  contato_nome         String?
+  valor                Decimal?   @db.Decimal
+  status_id            BigInt?
+  pipeline_id          BigInt?
+  etapa                String?
+  criado_em            DateTime?  @db.Timestamp(6)
+  atualizado_em        DateTime?  @db.Timestamp(6)
+  fechado              Boolean?   @default(false)
+  status               String?
+  updated_at           DateTime?  @default(now()) @db.Timestamp(6)
+  company_id           String?    @db.Uuid
+  custom_fields_values Json?
+  brokers              brokers?   @relation(fields: [responsavel_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_broker")
+  companies            companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_leads_company")
 
   @@schema("public")
 }
@@ -321,25 +322,23 @@ model weekly_logs {
 }
 
 model sla_metrics {
-  id                         Int       @id
-  company_id                 String    @db.Uuid
+  id                         Int       @id @default(autoincrement())
+  company_id                 String
   broker_id                  BigInt
   broker_name                String?
   leads_perdidos_inatividade Int?      @default(0)
   sla_status                 String?
-  calculated_at              DateTime  @db.Timestamp(6)
+  calculated_at              DateTime? @db.Timestamp(6)
   period_start               DateTime? @db.Timestamp(6)
   period_end                 DateTime? @db.Timestamp(6)
   created_at                 DateTime? @default(now()) @db.Timestamp(6)
-  updated_at                 DateTime? @default(now()) @db.Timestamp(6)
-  brokers                    brokers   @relation(fields: [broker_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  companies                  companies @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
+  @@unique([company_id, broker_id, calculated_at])
   @@schema("public")
 }
 
 model stages_list {
-  id            BigInt     @id
+  id            BigInt     @id @default(autoincrement())
   stage_id      BigInt?
   stage_name    String?    @db.VarChar
   pipeline_id   BigInt?
@@ -349,6 +348,27 @@ model stages_list {
   pipeline_name String?    @db.VarChar
   position      BigInt?
   companies     companies? @relation(fields: [company_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model auth_system {
+  id         BigInt     @id @default(autoincrement())
+  created_at DateTime   @default(now()) @db.Timestamptz(6)
+  company_id String?    @db.Uuid
+  password   String?    @db.VarChar
+  expire_at  DateTime?  @db.Timestamp(6)
+  companies  companies? @relation(fields: [company_id], references: [id], onDelete: Cascade)
+
+  @@map("auth-system")
+  @@schema("public")
+}
+
+model n8n_chat_histories {
+  id         Int    @id @default(autoincrement())
+  session_id String @db.VarChar(255)
+  message    Json
 
   @@schema("public")
 }
