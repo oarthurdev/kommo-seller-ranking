@@ -1079,6 +1079,11 @@ export async function getBrokerActivities(id: number, companyId: number) {
 
 // Função para converter UTC para GMT-3 (horário de Brasília)
 function convertToGMT3(utcDate: Date): Date {
+  if (!utcDate || !(utcDate instanceof Date) || isNaN(utcDate.getTime())) {
+    // Retorna data atual do Brasil se a entrada for inválida
+    const now = new Date();
+    return new Date(now.getTime() - (3 * 60 * 60 * 1000));
+  }
   const gmt3Date = new Date(utcDate.getTime() - (3 * 60 * 60 * 1000));
   return gmt3Date;
 }
@@ -1128,9 +1133,9 @@ export async function getActivityHeatmap(
     let periodStart: Date, periodEnd: Date;
 
     if (startDate && endDate) {
-      // Criar datas em GMT-3
-      periodStart = new Date(startDate + "T00:00:00.000-03:00");
-      periodEnd = new Date(endDate + "T23:59:59.999-03:00");
+      // Para datas fornecidas como string, criar datas GMT-3
+      periodStart = new Date(startDate + "T00:00:00-03:00");
+      periodEnd = new Date(endDate + "T23:59:59-03:00");
     } else {
       // Buscar filtro salvo para 'broker_heatmap'
       const heatmapFilter = await getComponentFilter(
@@ -1151,7 +1156,8 @@ export async function getActivityHeatmap(
         filterType = "current_month"; // Default para mês atual
       }
 
-      const period = getDateRangeBrazil(
+      // Usar função de data range padrão em vez da Brazil (que estava causando problemas)
+      const period = getDateRange(
         filterType,
         customStartDate,
         customEndDate,
@@ -1159,20 +1165,25 @@ export async function getActivityHeatmap(
         selectedYear,
       );
 
-      periodStart = period.start;
-      periodEnd = period.end;
+      // Ajustar datas para GMT-3 após obter o período
+      const nowBrazil = new Date();
+      const offsetMs = 3 * 60 * 60 * 1000; // 3 horas em millisegundos
+
+      periodStart = new Date(period.start.getTime() - offsetMs);
+      periodEnd = new Date(period.end.getTime() - offsetMs);
     }
 
     // Validar se as datas do período são válidas
     if (!isValidDate(periodStart) || !isValidDate(periodEnd)) {
       console.error("Datas de período inválidas:", periodStart, periodEnd);
-      return {
-        dias: [],
-        horarios: [],
-        mensagensRecebidas: [],
-        mensagensEnviadas: [],
-        period_info: "Erro: Período de análise inválido.",
-      };
+      // Usar mês atual como fallback
+      const now = new Date();
+      const offsetMs = 3 * 60 * 60 * 1000; // 3 horas GMT-3
+      periodStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      periodStart = new Date(periodStart.getTime() - offsetMs);
+      periodEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      periodEnd = new Date(periodEnd.getTime() - offsetMs);
+      console.log("Usando período fallback:", periodStart.toISOString(), "até", periodEnd.toISOString());
     }
 
     const periodInfo = `Período: ${periodStart.toLocaleDateString("pt-BR")} a ${periodEnd.toLocaleDateString("pt-BR")}`;
@@ -2185,15 +2196,21 @@ export async function getLostLeadsByStage(
       return {};
     }
 
-    const { data: activities, error } = await supabase.rpc(
-      "get_activities_with_lost_status",
-      {
-        company: companyId,
-        broker: brokerId ?? null,
-        start_date: currentPeriodStartUTC.toISOString(),
-        end_date: currentPeriodEndUTC.toISOString(),
-      },
-    );
+    // Buscar atividades diretamente da tabela activities
+    let activitiesQuery = supabase
+      .from("activities")
+      .select("id, valor_novo, valor_anterior, criado_em, user_id, lead_id")
+      .eq("company_id", companyId)
+      .eq("tipo", "mudança_status")
+      .gte("criado_em", currentPeriodStartUTC.toISOString())
+      .lte("criado_em", currentPeriodEndUTC.toISOString());
+
+    // Se um corretor específico foi fornecido, filtrar por ele
+    if (brokerId) {
+      activitiesQuery = activitiesQuery.eq("user_id", brokerId);
+    }
+
+    const { data: activities, error } = await activitiesQuery;
 
     if (error) {
       console.error("Erro ao buscar atividades:", error);
