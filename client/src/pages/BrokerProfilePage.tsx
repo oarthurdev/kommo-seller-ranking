@@ -566,7 +566,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.propostas_enviadas || 0}
+                    {weeklyPerformanceData?.propostas_enviadas || 0}
                   </p>
                 </Card>
 

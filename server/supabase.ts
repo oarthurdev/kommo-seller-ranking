@@ -2476,11 +2476,13 @@ export async function getBrokerWeeklyPerformanceMetrics(
       console.error("Erro ao buscar propostas:", propostasError);
     }
 
-    // Contar propostas que começam com "proposta" (maiúsculo ou minúsculo)
-    const propostasEnviadas = (propostasData || []).filter((lead) => {
-      const etapa = lead.etapa?.toLowerCase() || "";
-      return etapa.startsWith("proposta");
-    }).length;
+    const propostasEnviadas = await getPropostasEnviadasNoMes(
+        brokerId,
+        companyId,
+        currentPeriodStartUTC,
+        currentPeriodEndUTC,
+        availablePipelineIds,
+      );
 
     console.log(`Propostas enviadas (baseado em etapa): ${propostasEnviadas}`);
 
