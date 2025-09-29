@@ -1,6 +1,8 @@
 import { Request, Response } from "express";
 import { supabase } from "../supabase";
 
+const bcrypt = require('bcrypt');
+
 export async function loginAuth(req: Request, res: Response) {
   try {
     const { password } = req.body;
@@ -14,21 +16,28 @@ export async function loginAuth(req: Request, res: Response) {
       return res.status(400).json({ message: "Company ID não encontrado" });
     }
 
+    console.log(`Tentativa de login para companyId: ${companyId}`);
+    console.log("Senha fornecida:", password)
+
     // Buscar configuração de autenticação da empresa
     const { data: authConfig, error } = await supabase
       .from("auth_system")
-      .select("*")
+      .select("password, expire_at")
       .eq("company_id", companyId)
-      .eq("password", password)
       .single();
 
-    if (error || !authConfig) {
+    const isMatch = await bcrypt.compare(password, authConfig?.password || "");
+    
+    console.log("Configuração de autenticação encontrada:", authConfig);
+    console.log("Erro ao buscar configuração de autenticação:", error);
+
+    if (!isMatch) {
       return res.status(401).json({ message: "Senha incorreta" });
     }
 
     // Verificar se não expirou
     const now = new Date();
-    const expireAt = new Date(authConfig.expire_at);
+    const expireAt = new Date(authConfig?.expire_at);
 
     if (now > expireAt) {
       return res.status(401).json({ message: "Acesso expirado" });
@@ -36,7 +45,7 @@ export async function loginAuth(req: Request, res: Response) {
 
     res.json({
       success: true,
-      expire_at: authConfig.expire_at,
+      expire_at: authConfig?.expire_at,
       message: "Autenticação realizada com sucesso",
     });
   } catch (error) {
