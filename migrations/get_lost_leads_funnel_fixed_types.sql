@@ -1,6 +1,6 @@
 
--- Função corrigida get_lost_leads_funnel usando stages_list dinâmicamente
--- Determina a etapa anterior baseada na hierarquia dos custom fields
+-- Função corrigida get_lost_leads_funnel usando estrutura real da custom_fields_values
+-- A coluna é um array de objetos com field_name e values
 
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_company_id UUID,
@@ -44,23 +44,30 @@ BEGIN
            OR lf.etapa = p_stage_name
            OR lf.etapa ILIKE '%perdido%'
            OR lf.etapa ILIKE '%lost%'
-           OR (lf.custom_fields_values IS NOT NULL 
-               AND lf.custom_fields_values != '{}' 
-               AND lf.custom_fields_values::jsonb ? 'Perdidos' 
-               AND lf.custom_fields_values::jsonb->>'Perdidos' = 'true')
+           OR (
+               lf.custom_fields_values IS NOT NULL 
+               AND lf.custom_fields_values != '[]' 
+               AND lf.custom_fields_values != ''
+               AND EXISTS (
+                   SELECT 1
+                   FROM jsonb_array_elements(lf.custom_fields_values::jsonb) AS cf
+                   WHERE cf->>'field_name' = 'Perdidos'
+                     AND cf->'values'->0->>'value' = 'true'
+               )
+           )
     ),
     -- Buscar etapas dinamicamente da tabela stages_list
     etapas_company AS (
         SELECT 
             stage_name,
             stage_id,
-            -- Criar uma ordem baseada no stage_id (assumindo que IDs menores = etapas anteriores)
             ROW_NUMBER() OVER (ORDER BY stage_id) as ordem
         FROM stages_list 
         WHERE company_id = p_company_id
           AND stage_name IS NOT NULL
           AND stage_name != ''
-          AND stage_name != p_stage_name  -- Excluir a própria etapa "Perdidos"
+          AND stage_name != p_stage_name
+          AND stage_name != 'Perdidos'
           AND stage_name NOT ILIKE '%perdido%'
           AND stage_name NOT ILIKE '%lost%'
     ),
@@ -70,30 +77,21 @@ BEGIN
             lp.valor,
             CASE 
                 WHEN lp.custom_fields_values IS NOT NULL 
-                     AND lp.custom_fields_values != '{}' 
-                     AND lp.custom_fields_values::jsonb ? 'Perdidos'
-                     AND lp.custom_fields_values::jsonb->>'Perdidos' = 'true'
+                     AND lp.custom_fields_values != '[]' 
+                     AND lp.custom_fields_values != ''
                 THEN
                     -- Encontrar a última etapa marcada como true (maior ordem)
                     -- Buscar nos custom fields quais etapas estão marcadas como true
                     (
                         SELECT ec.stage_name
                         FROM etapas_company ec
-                        WHERE lp.custom_fields_values::jsonb ? ec.stage_name
-                          AND lp.custom_fields_values::jsonb->>ec.stage_name = 'true'
-                        ORDER BY ec.ordem DESC
-                        LIMIT 1
-                    )
-                WHEN lp.custom_fields_values IS NOT NULL 
-                     AND lp.custom_fields_values != '{}'
-                THEN
-                    -- Se não tem "Perdidos" = true, mas tem custom fields,
-                    -- buscar a última etapa true encontrada
-                    (
-                        SELECT ec.stage_name
-                        FROM etapas_company ec
-                        WHERE lp.custom_fields_values::jsonb ? ec.stage_name
-                          AND lp.custom_fields_values::jsonb->>ec.stage_name = 'true'
+                        WHERE EXISTS (
+                            SELECT 1
+                            FROM jsonb_array_elements(lp.custom_fields_values::jsonb) AS cf
+                            WHERE cf->>'field_name' = ec.stage_name
+                              AND cf->>'field_type' = 'checkbox'
+                              AND cf->'values'->0->>'value' = 'true'
+                        )
                         ORDER BY ec.ordem DESC
                         LIMIT 1
                     )
@@ -102,6 +100,7 @@ BEGIN
                     CASE 
                         WHEN lp.etapa IS NOT NULL 
                              AND lp.etapa != p_stage_name 
+                             AND lp.etapa != 'Perdidos'
                              AND lp.etapa NOT ILIKE '%perdido%'
                              AND lp.etapa NOT ILIKE '%lost%'
                              AND EXISTS (
@@ -115,7 +114,7 @@ BEGIN
         FROM leads_perdidos lp
     )
     SELECT 
-        ea.etapa_anterior::TEXT,
+        ea.etapa_anterior,
         COUNT(DISTINCT ea.lead_id)::INTEGER as total,
         COALESCE(SUM(
             CASE 
