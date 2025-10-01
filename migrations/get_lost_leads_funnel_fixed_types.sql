@@ -65,28 +65,38 @@ BEGIN
                      OR LENGTH(lf.custom_fields_values::text) < 3
                 THEN '[]'::jsonb
                 ELSE
-                    -- Tentar converter string para JSONB com tratamento de erro
-                    CASE 
-                        WHEN lf.custom_fields_values::text ~ '^"?\[.*\]"?$'
-                        THEN
-                            CASE
-                                WHEN lf.custom_fields_values::text ~ '^".*"$'
-                                THEN 
-                                    -- Remove aspas duplas externas se existirem
-                                    CASE
-                                        WHEN (TRIM(BOTH '"' FROM lf.custom_fields_values::text))::jsonb IS NOT NULL
-                                        THEN (TRIM(BOTH '"' FROM lf.custom_fields_values::text))::jsonb
-                                        ELSE '[]'::jsonb
-                                    END
-                                ELSE
-                                    CASE
-                                        WHEN lf.custom_fields_values::jsonb IS NOT NULL
-                                        THEN lf.custom_fields_values::jsonb
-                                        ELSE '[]'::jsonb
-                                    END
+                    -- Parsing seguro com tratamento de exceções
+                    (
+                        SELECT 
+                            CASE 
+                                WHEN safe_json IS NOT NULL THEN safe_json
+                                ELSE '[]'::jsonb
                             END
-                        ELSE '[]'::jsonb
-                    END
+                        FROM (
+                            SELECT 
+                                CASE
+                                    WHEN lf.custom_fields_values::text ~ '^"?\[.*\]"?$'
+                                    THEN
+                                        -- Tentar parsing direto primeiro
+                                        CASE
+                                            WHEN lf.custom_fields_values::text !~ '[\x00-\x1F\x7F]' -- sem caracteres de controle
+                                                 AND lf.custom_fields_values::text !~ '''[^'']*[^'']$' -- sem aspas simples malformadas
+                                            THEN
+                                                CASE
+                                                    WHEN lf.custom_fields_values::text ~ '^".*"$'
+                                                    THEN 
+                                                        -- String com aspas duplas externas
+                                                        (TRIM(BOTH '"' FROM lf.custom_fields_values::text))::jsonb
+                                                    ELSE
+                                                        -- String sem aspas externas
+                                                        lf.custom_fields_values::jsonb
+                                                END
+                                            ELSE NULL
+                                        END
+                                    ELSE NULL
+                                END as safe_json
+                        ) parsed
+                    )
             END as parsed_custom_fields
         FROM debug_leads_filtrados lf
     ),

@@ -48,6 +48,8 @@ WITH custom_fields_analysis AS (
             WHEN custom_fields_values::text = '[]' THEN 'ARRAY_VAZIO'
             WHEN custom_fields_values::text = 'null' THEN 'STRING_NULL'
             WHEN custom_fields_values::text ~ '^[[:space:]]*$' THEN 'APENAS_ESPACOS'
+            WHEN custom_fields_values::text ~ '''[^'']*[^'']$' THEN 'ASPAS_SIMPLES_MALFORMADAS'
+            WHEN custom_fields_values::text ~ '[\x00-\x1F\x7F]' THEN 'CARACTERES_CONTROLE'
             WHEN custom_fields_values::text ~ '^"?\[.*\]"?$' THEN 'FORMATO_ARRAY_VALIDO'
             WHEN custom_fields_values::text ~ '^"?\[' AND custom_fields_values::text !~ '\]"?$' THEN 'ARRAY_INCOMPLETO'
             ELSE 'FORMATO_INVALIDO'
@@ -61,7 +63,18 @@ WITH custom_fields_analysis AS (
             WHEN custom_fields_values IS NOT NULL AND LENGTH(custom_fields_values::text) > 0
             THEN SUBSTRING(custom_fields_values::text, LENGTH(custom_fields_values::text), 1)
             ELSE NULL
-        END as ultimo_char
+        END as ultimo_char,
+        -- Verificar se contém aspas simples
+        CASE 
+            WHEN custom_fields_values::text ~ '''' THEN 'SIM'
+            ELSE 'NAO'
+        END as contem_aspas_simples,
+        -- Contar aspas simples
+        CASE 
+            WHEN custom_fields_values IS NOT NULL
+            THEN LENGTH(custom_fields_values::text) - LENGTH(REPLACE(custom_fields_values::text, '''', ''))
+            ELSE 0
+        END as qtd_aspas_simples
     FROM leads 
     WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
       AND atualizado_em >= '2025-09-01 00:00:00'
@@ -73,7 +86,9 @@ SELECT
     COUNT(*) as quantidade,
     MIN(tamanho_campo) as tamanho_min,
     MAX(tamanho_campo) as tamanho_max,
-    AVG(tamanho_campo) as tamanho_medio
+    AVG(tamanho_campo) as tamanho_medio,
+    SUM(CASE WHEN contem_aspas_simples = 'SIM' THEN 1 ELSE 0 END) as com_aspas_simples,
+    AVG(qtd_aspas_simples) as media_aspas_simples
 FROM custom_fields_analysis
 GROUP BY tipo_conteudo
 ORDER BY quantidade DESC;
@@ -176,7 +191,32 @@ WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
   AND custom_fields_values::text !~ '^"?\[.*\]"?$'
 LIMIT 3;
 
--- 9. Verificar exemplos de custom_fields válidos
+-- 9. Verificar strings com aspas simples problemáticas
+SELECT 
+    'Strings com aspas simples problemáticas' as teste,
+    id as lead_id,
+    etapa,
+    status_id,
+    LENGTH(custom_fields_values::text) as tamanho,
+    LENGTH(custom_fields_values::text) - LENGTH(REPLACE(custom_fields_values::text, '''', '')) as qtd_aspas_simples,
+    SUBSTRING(custom_fields_values::text, 1, 100) as preview_inicio,
+    CASE 
+        WHEN LENGTH(custom_fields_values::text) > 100
+        THEN SUBSTRING(custom_fields_values::text, LENGTH(custom_fields_values::text) - 49, 50)
+        ELSE ''
+    END as preview_fim
+FROM leads 
+WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
+  AND atualizado_em >= '2025-09-01 00:00:00'
+  AND atualizado_em <= '2025-09-30 23:59:59'
+  AND custom_fields_values IS NOT NULL
+  AND custom_fields_values::text != ''
+  AND custom_fields_values::text != '[]'
+  AND custom_fields_values::text != 'null'
+  AND custom_fields_values::text ~ ''''
+LIMIT 5;
+
+-- 10. Verificar exemplos de custom_fields válidos
 SELECT 
     'Exemplos de custom_fields válidos' as teste,
     id as lead_id,
@@ -193,4 +233,6 @@ WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
   AND custom_fields_values::text != '[]'
   AND custom_fields_values::text != 'null'
   AND custom_fields_values::text ~ '^"?\[.*\]"?$'
+  AND custom_fields_values::text !~ ''''
+  AND custom_fields_values::text !~ '[\x00-\x1F\x7F]'
 LIMIT 5;
