@@ -1,5 +1,5 @@
 
--- Função corrigida get_lost_leads_funnel usando estrutura real da custom_fields_values
+-- Função corrigida get_lost_leads_funnel com tratamento robusto de JSON
 -- A coluna é um array de objetos com field_name e values
 
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
@@ -59,14 +59,31 @@ BEGIN
            OR lf.etapa ILIKE '%perdido%'
            OR lf.etapa ILIKE '%lost%'
            OR (
+               -- Verificação mais robusta para custom_fields_values
                lf.custom_fields_values IS NOT NULL 
-               AND lf.custom_fields_values != '[]' 
-               AND lf.custom_fields_values != ''
-               AND EXISTS (
-                   SELECT 1
-                   FROM jsonb_array_elements(lf.custom_fields_values::jsonb) AS cf
-                   WHERE cf->>'field_name' = 'Perdidos'
-                     AND cf->'values'->0->>'value' = 'true'
+               AND lf.custom_fields_values != '' 
+               AND lf.custom_fields_values != '[]'
+               AND lf.custom_fields_values != 'null'
+               AND lf.custom_fields_values !~ '^[[:space:]]*$' -- não é só espaços em branco
+               AND (
+                   -- Tentativa segura de parse JSON
+                   CASE 
+                       WHEN lf.custom_fields_values::text ~ '^[[:space:]]*\[' 
+                       THEN
+                           EXISTS (
+                               SELECT 1
+                               FROM jsonb_array_elements(
+                                   CASE 
+                                       WHEN lf.custom_fields_values::text ~ '^[[:space:]]*\[.*\][[:space:]]*$'
+                                       THEN lf.custom_fields_values::jsonb
+                                       ELSE '[]'::jsonb
+                                   END
+                               ) AS cf
+                               WHERE cf->>'field_name' = 'Perdidos'
+                                 AND cf->'values'->0->>'value' = 'true'
+                           )
+                       ELSE FALSE
+                   END
                )
            )
     ),
@@ -101,8 +118,11 @@ BEGIN
             lp.etapa as etapa_atual,
             CASE 
                 WHEN lp.custom_fields_values IS NOT NULL 
-                     AND lp.custom_fields_values != '[]' 
-                     AND lp.custom_fields_values != ''
+                     AND lp.custom_fields_values != '' 
+                     AND lp.custom_fields_values != '[]'
+                     AND lp.custom_fields_values != 'null'
+                     AND lp.custom_fields_values !~ '^[[:space:]]*$'
+                     AND lp.custom_fields_values::text ~ '^[[:space:]]*\['
                 THEN
                     -- Encontrar a última etapa marcada como true (maior ordem)
                     -- Buscar nos custom fields quais etapas estão marcadas como true
@@ -111,7 +131,13 @@ BEGIN
                         FROM debug_etapas_company ec
                         WHERE EXISTS (
                             SELECT 1
-                            FROM jsonb_array_elements(lp.custom_fields_values::jsonb) AS cf
+                            FROM jsonb_array_elements(
+                                CASE 
+                                    WHEN lp.custom_fields_values::text ~ '^[[:space:]]*\[.*\][[:space:]]*$'
+                                    THEN lp.custom_fields_values::jsonb
+                                    ELSE '[]'::jsonb
+                                END
+                            ) AS cf
                             WHERE cf->>'field_name' = ec.stage_name
                               AND cf->>'field_type' = 'checkbox'
                               AND cf->'values'->0->>'value' = 'true'
@@ -192,7 +218,8 @@ BEGIN
     FOR debug_info IN 
         SELECT 'Lead ID: ' || l.id || ', Etapa: ' || COALESCE(l.etapa, 'NULL') || 
                ', Status: ' || l.status_id || ', Custom fields presente: ' || 
-               CASE WHEN l.custom_fields_values IS NOT NULL THEN 'SIM' ELSE 'NÃO' END
+               CASE WHEN l.custom_fields_values IS NOT NULL AND l.custom_fields_values != '' THEN 'SIM' ELSE 'NÃO' END ||
+               ', Tamanho: ' || COALESCE(LENGTH(l.custom_fields_values::text), 0)
         FROM leads l 
         WHERE l.company_id = p_company_id 
           AND l.atualizado_em >= p_start 
