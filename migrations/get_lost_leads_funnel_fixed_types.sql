@@ -1,6 +1,6 @@
 
 -- Função corrigida get_lost_leads_funnel com tratamento robusto de JSON
--- A coluna é um array de objetos com field_name e values
+-- A coluna é uma string que contém um array de objetos com field_name e values
 
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_company_id UUID,
@@ -53,25 +53,38 @@ BEGIN
         SELECT *, (SELECT COUNT(*) FROM leads_filtrados) as total_filtrados
         FROM leads_filtrados
     ),
-    -- CTE para validar e limpar JSON malformado
+    -- CTE para validar e converter string para JSONB
     leads_with_clean_json AS (
         SELECT 
             lf.*,
             CASE 
                 WHEN lf.custom_fields_values IS NULL 
-                     OR lf.custom_fields_values = ''
-                     OR lf.custom_fields_values = '[]'
-                     OR lf.custom_fields_values = 'null'
-                     OR lf.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
+                     OR lf.custom_fields_values::text = ''
+                     OR lf.custom_fields_values::text = '[]'
+                     OR lf.custom_fields_values::text = 'null'
+                     OR LENGTH(lf.custom_fields_values::text) < 3
                 THEN '[]'::jsonb
                 ELSE
-                    -- Tentar fazer parse seguro com tratamento de erro
+                    -- Tentar converter string para JSONB com tratamento de erro
                     CASE 
-                        WHEN (
-                            SELECT 1 
-                            WHERE lf.custom_fields_values::jsonb IS NOT NULL
-                        ) = 1
-                        THEN lf.custom_fields_values::jsonb
+                        WHEN lf.custom_fields_values::text ~ '^"?\[.*\]"?$'
+                        THEN
+                            CASE
+                                WHEN lf.custom_fields_values::text ~ '^".*"$'
+                                THEN 
+                                    -- Remove aspas duplas externas se existirem
+                                    CASE
+                                        WHEN (TRIM(BOTH '"' FROM lf.custom_fields_values::text))::jsonb IS NOT NULL
+                                        THEN (TRIM(BOTH '"' FROM lf.custom_fields_values::text))::jsonb
+                                        ELSE '[]'::jsonb
+                                    END
+                                ELSE
+                                    CASE
+                                        WHEN lf.custom_fields_values::jsonb IS NOT NULL
+                                        THEN lf.custom_fields_values::jsonb
+                                        ELSE '[]'::jsonb
+                                    END
+                            END
                         ELSE '[]'::jsonb
                     END
             END as parsed_custom_fields
@@ -201,30 +214,22 @@ BEGIN
       AND l.atualizado_em >= p_start 
       AND l.atualizado_em <= p_end 
       AND l.custom_fields_values IS NOT NULL
-      AND l.custom_fields_values != ''
-      AND l.custom_fields_values != '[]'
-      AND l.custom_fields_values != 'null'
-      AND (
-          l.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
-          OR (
-              SELECT 1 
-              WHERE l.custom_fields_values::jsonb IS NOT NULL
-          ) IS NULL
-      );
+      AND l.custom_fields_values::text != ''
+      AND l.custom_fields_values::text != '[]'
+      AND l.custom_fields_values::text != 'null'
+      AND LENGTH(l.custom_fields_values::text) >= 3
+      AND l.custom_fields_values::text !~ '^"?\[.*\]"?$';
 
     SELECT COUNT(*) INTO valid_json_count FROM leads l
     WHERE l.company_id = p_company_id 
       AND l.atualizado_em >= p_start 
       AND l.atualizado_em <= p_end 
       AND l.custom_fields_values IS NOT NULL
-      AND l.custom_fields_values != ''
-      AND l.custom_fields_values != '[]'
-      AND l.custom_fields_values != 'null'
-      AND l.custom_fields_values ~ '^[[:space:]]*\[.*\][[:space:]]*$'
-      AND (
-          SELECT 1 
-          WHERE l.custom_fields_values::jsonb IS NOT NULL
-      ) = 1;
+      AND l.custom_fields_values::text != ''
+      AND l.custom_fields_values::text != '[]'
+      AND l.custom_fields_values::text != 'null'
+      AND LENGTH(l.custom_fields_values::text) >= 3
+      AND l.custom_fields_values::text ~ '^"?\[.*\]"?$';
 
     RAISE NOTICE 'DEBUG: Leads filtrados: %, Etapas da empresa: %, JSONs malformados: %, JSONs válidos: %', 
         leads_filtrados_count, etapas_company_count, malformed_json_count, valid_json_count;
@@ -245,10 +250,10 @@ BEGIN
     FOR debug_info IN 
         SELECT 'Lead ID: ' || l.id || ', Etapa: ' || COALESCE(l.etapa, 'NULL') || 
                ', Status: ' || l.status_id || ', Custom fields presente: ' || 
-               CASE WHEN l.custom_fields_values IS NOT NULL AND l.custom_fields_values != '' THEN 'SIM' ELSE 'NÃO' END ||
+               CASE WHEN l.custom_fields_values IS NOT NULL AND l.custom_fields_values::text != '' THEN 'SIM' ELSE 'NÃO' END ||
                ', Tamanho: ' || COALESCE(LENGTH(l.custom_fields_values::text), 0) ||
-               ', Primeiro char: ' || COALESCE(SUBSTRING(l.custom_fields_values, 1, 1), 'NULL') ||
-               ', Último char: ' || COALESCE(SUBSTRING(l.custom_fields_values, LENGTH(l.custom_fields_values), 1), 'NULL')
+               ', Primeiro char: ' || COALESCE(SUBSTRING(l.custom_fields_values::text, 1, 1), 'NULL') ||
+               ', Último char: ' || COALESCE(SUBSTRING(l.custom_fields_values::text, LENGTH(l.custom_fields_values::text), 1), 'NULL')
         FROM leads l 
         WHERE l.company_id = p_company_id 
           AND l.atualizado_em >= p_start 
@@ -261,22 +266,17 @@ BEGIN
 
     -- Debug: Mostrar exemplos de custom_fields malformados
     FOR debug_info IN 
-        SELECT 'Lead malformado ID: ' || l.id || ', Conteúdo: ' || COALESCE(LEFT(l.custom_fields_values, 100), 'NULL')
+        SELECT 'Lead malformado ID: ' || l.id || ', Conteúdo: ' || COALESCE(LEFT(l.custom_fields_values::text, 100), 'NULL')
         FROM leads l 
         WHERE l.company_id = p_company_id 
           AND l.atualizado_em >= p_start 
           AND l.atualizado_em <= p_end 
           AND l.custom_fields_values IS NOT NULL
-          AND l.custom_fields_values != ''
-          AND l.custom_fields_values != '[]'
-          AND l.custom_fields_values != 'null'
-          AND (
-              l.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
-              OR (
-                  SELECT 1 
-                  WHERE l.custom_fields_values::jsonb IS NOT NULL
-              ) IS NULL
-          )
+          AND l.custom_fields_values::text != ''
+          AND l.custom_fields_values::text != '[]'
+          AND l.custom_fields_values::text != 'null'
+          AND LENGTH(l.custom_fields_values::text) >= 3
+          AND l.custom_fields_values::text !~ '^"?\[.*\]"?$'
         LIMIT 3
     LOOP
         RAISE NOTICE 'DEBUG: %', debug_info;
