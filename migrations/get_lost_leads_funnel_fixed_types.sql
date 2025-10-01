@@ -1,7 +1,7 @@
 
--- Função corrigida get_lost_leads_funnel com tipos corretos
--- Corrige o erro 42804 ajustando o tipo de retorno para character varying
--- Corrige a lógica para capturar todos os leads perdidos, não apenas o último
+
+-- Função corrigida get_lost_leads_funnel usando custom_fields_values
+-- Determina a etapa anterior baseada na hierarquia dos custom fields
 
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_company_id UUID,
@@ -12,7 +12,7 @@ CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_pipeline_ids BIGINT[] DEFAULT NULL
 ) 
 RETURNS TABLE(
-    etapa_anterior CHARACTER VARYING,  -- Mudado de TEXT para CHARACTER VARYING
+    etapa_anterior CHARACTER VARYING,
     total INTEGER,
     total_value NUMERIC
 ) 
@@ -29,7 +29,8 @@ BEGIN
             l.etapa,
             l.status_id,
             l.atualizado_em,
-            l.criado_em
+            l.criado_em,
+            l.custom_fields_values
         FROM leads l
         WHERE l.company_id = p_company_id
           AND l.atualizado_em >= p_start
@@ -44,59 +45,67 @@ BEGIN
            OR lf.etapa = p_stage_name
            OR lf.etapa ILIKE '%perdido%'
            OR lf.etapa ILIKE '%lost%'
+           OR (lf.custom_fields_values::jsonb ? 'Perdidos' 
+               AND lf.custom_fields_values::jsonb->>'Perdidos' = 'true')
     ),
-    -- Buscar todas as atividades relevantes para os leads perdidos
-    atividades_leads_perdidos AS (
-        SELECT 
-            a.lead_id,
-            a.status_anterior,
-            a.status_novo,
-            a.criado_em,
-            sl.stage_name,
-            lp.valor,
-            -- Ranking para identificar a última atividade antes da perda
-            ROW_NUMBER() OVER (
-                PARTITION BY a.lead_id 
-                ORDER BY a.criado_em DESC
-            ) as rn_desc
-        FROM leads_perdidos lp
-        JOIN activities a ON a.lead_id = lp.id AND a.company_id = p_company_id
-        LEFT JOIN stages_list sl ON sl.stage_id = a.status_anterior AND sl.company_id = p_company_id
-        WHERE a.criado_em <= lp.atualizado_em
+    -- Mapear as etapas em ordem hierárquica baseado na imagem
+    etapas_hierarquia AS (
+        SELECT etapa_nome, ordem FROM (
+            VALUES 
+                ('Sem contato', 1),
+                ('Contato feito', 2),
+                ('Aquecendo', 3),
+                ('Agendamento/Reunião', 4),
+                ('Crédito', 5),
+                ('Visita Imóvel', 6),
+                ('Proposta', 7),
+                ('contrato', 8),
+                ('Aprovado', 9),
+                ('ganho', 10)
+        ) AS etapas(etapa_nome, ordem)
     ),
     etapas_anteriores AS (
         SELECT 
             lp.id as lead_id,
             lp.valor,
-            COALESCE(
-                -- Buscar etapa anterior via atividades que mudaram para status perdido (143)
-                (SELECT alp.stage_name
-                 FROM atividades_leads_perdidos alp
-                 WHERE alp.lead_id = lp.id 
-                   AND alp.status_novo = 143
-                   AND alp.stage_name IS NOT NULL
-                 ORDER BY alp.criado_em DESC 
-                 LIMIT 1),
-                -- Fallback: última etapa antes da atual (mais confiável)
-                (SELECT alp.stage_name
-                 FROM atividades_leads_perdidos alp
-                 WHERE alp.lead_id = lp.id 
-                   AND alp.rn_desc = 1
-                   AND alp.stage_name IS NOT NULL
-                   AND alp.stage_name != p_stage_name
-                 LIMIT 1),
-                -- Fallback adicional: buscar qualquer etapa anterior válida
-                (SELECT sl.stage_name
-                 FROM activities a 
-                 JOIN stages_list sl ON sl.stage_id = a.status_novo AND sl.company_id = p_company_id
-                 WHERE a.lead_id = lp.id 
-                   AND a.company_id = p_company_id
-                   AND a.criado_em < lp.atualizado_em
-                   AND sl.stage_name IS NOT NULL
-                   AND sl.stage_name != p_stage_name
-                 ORDER BY a.criado_em DESC 
-                 LIMIT 1)
-            ) as etapa_anterior
+            CASE 
+                WHEN lp.custom_fields_values IS NOT NULL 
+                     AND lp.custom_fields_values != '{}' 
+                     AND lp.custom_fields_values::jsonb ? 'Perdidos'
+                     AND lp.custom_fields_values::jsonb->>'Perdidos' = 'true'
+                THEN
+                    -- Encontrar a última etapa marcada como true (maior ordem)
+                    (
+                        SELECT eh.etapa_nome
+                        FROM etapas_hierarquia eh
+                        WHERE lp.custom_fields_values::jsonb ? eh.etapa_nome
+                          AND lp.custom_fields_values::jsonb->>eh.etapa_nome = 'true'
+                        ORDER BY eh.ordem DESC
+                        LIMIT 1
+                    )
+                WHEN lp.custom_fields_values IS NOT NULL 
+                     AND lp.custom_fields_values != '{}'
+                THEN
+                    -- Se não tem "Perdidos" = true, usar a última etapa true encontrada
+                    (
+                        SELECT eh.etapa_nome
+                        FROM etapas_hierarquia eh
+                        WHERE lp.custom_fields_values::jsonb ? eh.etapa_nome
+                          AND lp.custom_fields_values::jsonb->>eh.etapa_nome = 'true'
+                        ORDER BY eh.ordem DESC
+                        LIMIT 1
+                    )
+                ELSE
+                    -- Fallback: usar etapa atual do lead
+                    CASE 
+                        WHEN lp.etapa IS NOT NULL 
+                             AND lp.etapa != p_stage_name 
+                             AND lp.etapa NOT ILIKE '%perdido%'
+                             AND lp.etapa NOT ILIKE '%lost%'
+                        THEN lp.etapa
+                        ELSE NULL
+                    END
+            END as etapa_anterior
         FROM leads_perdidos lp
     )
     SELECT 
@@ -112,8 +121,10 @@ BEGIN
     FROM etapas_anteriores ea
     WHERE ea.etapa_anterior IS NOT NULL 
       AND ea.etapa_anterior != ''
-      AND ea.etapa_anterior != p_stage_name  -- Evitar etapas iguais à etapa de perda
+      AND ea.etapa_anterior != p_stage_name
+      AND ea.etapa_anterior != 'Perdidos'
     GROUP BY ea.etapa_anterior
     ORDER BY total DESC;
 END;
 $$;
+
