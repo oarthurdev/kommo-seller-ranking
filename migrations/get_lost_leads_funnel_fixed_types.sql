@@ -23,6 +23,8 @@ DECLARE
     etapas_company_count INTEGER;
     etapas_anteriores_count INTEGER;
     debug_info TEXT;
+    malformed_json_count INTEGER;
+    valid_json_count INTEGER;
 BEGIN
     -- Debug: Log dos parâmetros recebidos
     RAISE NOTICE 'DEBUG: Parâmetros recebidos - company_id: %, start: %, end: %, stage_name: %, broker_id: %, pipeline_ids: %', 
@@ -51,39 +53,45 @@ BEGIN
         SELECT *, (SELECT COUNT(*) FROM leads_filtrados) as total_filtrados
         FROM leads_filtrados
     ),
+    -- CTE para validar e limpar JSON malformado
+    leads_with_clean_json AS (
+        SELECT 
+            lf.*,
+            CASE 
+                WHEN lf.custom_fields_values IS NULL 
+                     OR lf.custom_fields_values = ''
+                     OR lf.custom_fields_values = '[]'
+                     OR lf.custom_fields_values = 'null'
+                     OR lf.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
+                THEN '[]'::jsonb
+                ELSE
+                    -- Tentar fazer parse seguro com tratamento de erro
+                    CASE 
+                        WHEN (
+                            SELECT 1 
+                            WHERE lf.custom_fields_values::jsonb IS NOT NULL
+                        ) = 1
+                        THEN lf.custom_fields_values::jsonb
+                        ELSE '[]'::jsonb
+                    END
+            END as parsed_custom_fields
+        FROM debug_leads_filtrados lf
+    ),
     leads_perdidos AS (
         SELECT lf.*
-        FROM debug_leads_filtrados lf
+        FROM leads_with_clean_json lf
         WHERE lf.status_id = 143  -- Status perdido
            OR lf.etapa = p_stage_name
            OR lf.etapa ILIKE '%perdido%'
            OR lf.etapa ILIKE '%lost%'
            OR (
-               -- Verificação mais robusta para custom_fields_values
-               lf.custom_fields_values IS NOT NULL 
-               AND lf.custom_fields_values != '' 
-               AND lf.custom_fields_values != '[]'
-               AND lf.custom_fields_values != 'null'
-               AND lf.custom_fields_values !~ '^[[:space:]]*$' -- não é só espaços em branco
-               AND (
-                   -- Tentativa segura de parse JSON
-                   CASE 
-                       WHEN lf.custom_fields_values::text ~ '^[[:space:]]*\[' 
-                       THEN
-                           EXISTS (
-                               SELECT 1
-                               FROM jsonb_array_elements(
-                                   CASE 
-                                       WHEN lf.custom_fields_values::text ~ '^[[:space:]]*\[.*\][[:space:]]*$'
-                                       THEN lf.custom_fields_values::jsonb
-                                       ELSE '[]'::jsonb
-                                   END
-                               ) AS cf
-                               WHERE cf->>'field_name' = 'Perdidos'
-                                 AND cf->'values'->0->>'value' = 'true'
-                           )
-                       ELSE FALSE
-                   END
+               -- Verificação nos custom fields parseados
+               jsonb_array_length(lf.parsed_custom_fields) > 0
+               AND EXISTS (
+                   SELECT 1
+                   FROM jsonb_array_elements(lf.parsed_custom_fields) AS cf
+                   WHERE cf->>'field_name' = 'Perdidos'
+                     AND cf->'values'->0->>'value' = 'true'
                )
            )
     ),
@@ -114,30 +122,18 @@ BEGIN
         SELECT 
             lp.id as lead_id,
             lp.valor,
-            lp.custom_fields_values,
+            lp.parsed_custom_fields,
             lp.etapa as etapa_atual,
             CASE 
-                WHEN lp.custom_fields_values IS NOT NULL 
-                     AND lp.custom_fields_values != '' 
-                     AND lp.custom_fields_values != '[]'
-                     AND lp.custom_fields_values != 'null'
-                     AND lp.custom_fields_values !~ '^[[:space:]]*$'
-                     AND lp.custom_fields_values::text ~ '^[[:space:]]*\['
+                WHEN jsonb_array_length(lp.parsed_custom_fields) > 0
                 THEN
                     -- Encontrar a última etapa marcada como true (maior ordem)
-                    -- Buscar nos custom fields quais etapas estão marcadas como true
                     (
                         SELECT ec.stage_name
                         FROM debug_etapas_company ec
                         WHERE EXISTS (
                             SELECT 1
-                            FROM jsonb_array_elements(
-                                CASE 
-                                    WHEN lp.custom_fields_values::text ~ '^[[:space:]]*\[.*\][[:space:]]*$'
-                                    THEN lp.custom_fields_values::jsonb
-                                    ELSE '[]'::jsonb
-                                END
-                            ) AS cf
+                            FROM jsonb_array_elements(lp.parsed_custom_fields) AS cf
                             WHERE cf->>'field_name' = ec.stage_name
                               AND cf->>'field_type' = 'checkbox'
                               AND cf->'values'->0->>'value' = 'true'
@@ -199,8 +195,39 @@ BEGIN
       AND stage_name != '' 
       AND stage_name != p_stage_name;
 
-    RAISE NOTICE 'DEBUG: Leads filtrados: %, Etapas da empresa: %', 
-        leads_filtrados_count, etapas_company_count;
+    -- Debug: Contar JSONs malformados vs válidos
+    SELECT COUNT(*) INTO malformed_json_count FROM leads l
+    WHERE l.company_id = p_company_id 
+      AND l.atualizado_em >= p_start 
+      AND l.atualizado_em <= p_end 
+      AND l.custom_fields_values IS NOT NULL
+      AND l.custom_fields_values != ''
+      AND l.custom_fields_values != '[]'
+      AND l.custom_fields_values != 'null'
+      AND (
+          l.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
+          OR (
+              SELECT 1 
+              WHERE l.custom_fields_values::jsonb IS NOT NULL
+          ) IS NULL
+      );
+
+    SELECT COUNT(*) INTO valid_json_count FROM leads l
+    WHERE l.company_id = p_company_id 
+      AND l.atualizado_em >= p_start 
+      AND l.atualizado_em <= p_end 
+      AND l.custom_fields_values IS NOT NULL
+      AND l.custom_fields_values != ''
+      AND l.custom_fields_values != '[]'
+      AND l.custom_fields_values != 'null'
+      AND l.custom_fields_values ~ '^[[:space:]]*\[.*\][[:space:]]*$'
+      AND (
+          SELECT 1 
+          WHERE l.custom_fields_values::jsonb IS NOT NULL
+      ) = 1;
+
+    RAISE NOTICE 'DEBUG: Leads filtrados: %, Etapas da empresa: %, JSONs malformados: %, JSONs válidos: %', 
+        leads_filtrados_count, etapas_company_count, malformed_json_count, valid_json_count;
 
     -- Debug: Mostrar algumas etapas da empresa
     FOR debug_info IN 
@@ -219,13 +246,38 @@ BEGIN
         SELECT 'Lead ID: ' || l.id || ', Etapa: ' || COALESCE(l.etapa, 'NULL') || 
                ', Status: ' || l.status_id || ', Custom fields presente: ' || 
                CASE WHEN l.custom_fields_values IS NOT NULL AND l.custom_fields_values != '' THEN 'SIM' ELSE 'NÃO' END ||
-               ', Tamanho: ' || COALESCE(LENGTH(l.custom_fields_values::text), 0)
+               ', Tamanho: ' || COALESCE(LENGTH(l.custom_fields_values::text), 0) ||
+               ', Primeiro char: ' || COALESCE(SUBSTRING(l.custom_fields_values, 1, 1), 'NULL') ||
+               ', Último char: ' || COALESCE(SUBSTRING(l.custom_fields_values, LENGTH(l.custom_fields_values), 1), 'NULL')
         FROM leads l 
         WHERE l.company_id = p_company_id 
           AND l.atualizado_em >= p_start 
           AND l.atualizado_em <= p_end 
           AND (l.status_id = 143 OR l.etapa ILIKE '%perdido%')
         LIMIT 5
+    LOOP
+        RAISE NOTICE 'DEBUG: %', debug_info;
+    END LOOP;
+
+    -- Debug: Mostrar exemplos de custom_fields malformados
+    FOR debug_info IN 
+        SELECT 'Lead malformado ID: ' || l.id || ', Conteúdo: ' || COALESCE(LEFT(l.custom_fields_values, 100), 'NULL')
+        FROM leads l 
+        WHERE l.company_id = p_company_id 
+          AND l.atualizado_em >= p_start 
+          AND l.atualizado_em <= p_end 
+          AND l.custom_fields_values IS NOT NULL
+          AND l.custom_fields_values != ''
+          AND l.custom_fields_values != '[]'
+          AND l.custom_fields_values != 'null'
+          AND (
+              l.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
+              OR (
+                  SELECT 1 
+                  WHERE l.custom_fields_values::jsonb IS NOT NULL
+              ) IS NULL
+          )
+        LIMIT 3
     LOOP
         RAISE NOTICE 'DEBUG: %', debug_info;
     END LOOP;
