@@ -1902,7 +1902,9 @@ export async function getTotalLeads(
     const { data: activeBrokers } = await supabase
       .from("brokers")
       .select("id")
-      .eq("company_id", companyId);
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .eq("cargo", "Corretor");
 
     if (activeBrokers && activeBrokers.length > 0) {
       const activeBrokerIds = activeBrokers.map((broker) => broker.id);
@@ -2253,10 +2255,6 @@ const LOST_LEADS_STAGE_COLORS = [
   "#F97316", // Orange-500
 ];
 
-// Cache para armazenar resultados por 5 minutos
-const lostLeadsCache = new Map<string, { data: any; timestamp: number }>();
-const CACHE_DURATION = 5 * 60 * 1000; // 5 minutos
-
 export async function getLostLeadsByStage(
   companyId: string,
   brokerId?: string,
@@ -2318,6 +2316,8 @@ export async function getLostLeadsByStage(
       .eq("stage_id", 143)
       .single();
 
+    console.log("STAGE PERDIDO ID:", stageRow);
+
     if (stageError || !stageRow) {
       console.error("Erro ao buscar stage_name perdido:", stageError);
       return {};
@@ -2325,23 +2325,29 @@ export async function getLostLeadsByStage(
 
     const lostStageName = stageRow.stage_name;
 
+    console.log("LOST STAGE NAME:", lostStageName);
+
     // Usar a função RPC para buscar leads perdidos por etapa anterior
-    const { data: rpcResult, error: rpcError } = await supabase
-      .rpc("get_lost_leads_funnel", {
+    const { data: rpcResult, error: rpcError } = await supabase.rpc(
+      "get_lost_leads_funnel",
+      {
         p_company_id: companyId,
         p_start: currentPeriodStartUTC.toISOString(),
         p_end: currentPeriodEndUTC.toISOString(),
         p_stage_name: lostStageName,
         p_broker_id: brokerId ? parseInt(brokerId) : null,
         p_pipeline_ids: availablePipelineIds,
-      });
+      },
+    );
 
     if (rpcError) {
       console.error("Erro ao executar RPC get_lost_leads_funnel:", rpcError);
       return {};
     }
 
-    console.log(`RPC retornou ${rpcResult?.length || 0} etapas com leads perdidos`);
+    console.log(
+      `RPC retornou ${rpcResult?.length || 0} etapas com leads perdidos`,
+    );
 
     // Processar resultado da RPC
     const lostByPreviousStage: {
@@ -2360,9 +2366,7 @@ export async function getLostLeadsByStage(
         if (!row.etapa_anterior || row.total <= 0) continue;
 
         const assignedColor =
-          LOST_LEADS_STAGE_COLORS[
-            colorIndex % LOST_LEADS_STAGE_COLORS.length
-          ];
+          LOST_LEADS_STAGE_COLORS[colorIndex % LOST_LEADS_STAGE_COLORS.length];
         colorIndex++;
 
         lostByPreviousStage[row.etapa_anterior] = {
@@ -2477,12 +2481,12 @@ export async function getBrokerWeeklyPerformanceMetrics(
     }
 
     const propostasEnviadas = await getPropostasEnviadasNoMes(
-        brokerId,
-        companyId,
-        currentPeriodStartUTC,
-        currentPeriodEndUTC,
-        availablePipelineIds,
-      );
+      brokerId,
+      companyId,
+      currentPeriodStartUTC,
+      currentPeriodEndUTC,
+      availablePipelineIds,
+    );
 
     console.log(`Propostas enviadas (baseado em etapa): ${propostasEnviadas}`);
 

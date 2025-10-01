@@ -498,7 +498,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const brokerId = parseInt(req.params.id);
       const { filterType, startDate, endDate, allPipelines } = req.query;
 
-      console.log(`Heatmap request: filterType=${filterType}, startDate=${startDate}, endDate=${endDate}`);
+      console.log(
+        `Heatmap request: filterType=${filterType}, startDate=${startDate}, endDate=${endDate}`,
+      );
 
       let startFormatted, endFormatted;
 
@@ -508,8 +510,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           startDate as string,
           endDate as string,
         );
-        startFormatted = dateRange.start.toISOString().split('T')[0]; // YYYY-MM-DD
-        endFormatted = dateRange.end.toISOString().split('T')[0]; // YYYY-MM-DD
+        startFormatted = dateRange.start.toISOString().split("T")[0]; // YYYY-MM-DD
+        endFormatted = dateRange.end.toISOString().split("T")[0]; // YYYY-MM-DD
       } else if (startDate && endDate) {
         // Para custom_range, usar as datas fornecidas
         startFormatted = startDate as string;
@@ -518,11 +520,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fallback para últimos 7 dias
         const now = new Date();
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-        startFormatted = sevenDaysAgo.toISOString().split('T')[0];
-        endFormatted = now.toISOString().split('T')[0];
+        startFormatted = sevenDaysAgo.toISOString().split("T")[0];
+        endFormatted = now.toISOString().split("T")[0];
       }
 
-      console.log(`Processando heatmap com datas: ${startFormatted} até ${endFormatted}`);
+      console.log(
+        `Processando heatmap com datas: ${startFormatted} até ${endFormatted}`,
+      );
 
       const heatmap = await getActivityHeatmap(
         brokerId,
@@ -1015,7 +1019,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Company ID required" });
       }
 
-      const response = await fetch(`https://sync.imobiliario.tec.br/broker-points-status/${companyId}`);
+      const response = await fetch(
+        `https://sync.imobiliario.tec.br/broker-points-status/${companyId}`,
+      );
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -1025,47 +1031,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json(data);
     } catch (error) {
       console.error("Error fetching broker points status:", error);
-      res.status(500).json({ 
-        status: 'error',
-        message: 'Failed to fetch broker points status' 
+      res.status(500).json({
+        status: "error",
+        message: "Failed to fetch broker points status",
       });
     }
   });
 
   // Recalculate broker points endpoint
-  app.post("/api/recalculate-broker-points", companyContext, async (req, res) => {
-    try {
-      const companyId = (req as any).companyId;
+  app.post(
+    "/api/recalculate-broker-points",
+    companyContext,
+    async (req, res) => {
+      try {
+        const companyId = (req as any).companyId;
 
-      if (!companyId) {
-        return res.status(400).json({ error: "Company ID required" });
-      }
-
-      console.log(`Triggering broker points recalculation for company: ${companyId}`);
-
-      const response = await fetch(`https://sync.imobiliario.tec.br/recalculate-broker-points/${companyId}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
+        if (!companyId) {
+          return res.status(400).json({ error: "Company ID required" });
         }
-      });
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        console.log(
+          `Triggering broker points recalculation for company: ${companyId}`,
+        );
+
+        const response = await fetch(
+          `https://sync.imobiliario.tec.br/recalculate-broker-points/${companyId}`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          },
+        );
+
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        const data = await response.json();
+        console.log(`Broker points recalculation response:`, data);
+
+        res.json(data);
+      } catch (error) {
+        console.error("Error triggering broker points recalculation:", error);
+        res.status(500).json({
+          status: "error",
+          message: "Failed to trigger broker points recalculation",
+        });
       }
-
-      const data = await response.json();
-      console.log(`Broker points recalculation response:`, data);
-
-      res.json(data);
-    } catch (error) {
-      console.error("Error triggering broker points recalculation:", error);
-      res.status(500).json({ 
-        status: 'error',
-        message: 'Failed to trigger broker points recalculation' 
-      });
-    }
-  });
+    },
+  );
 
   const httpServer = createServer(app);
   return httpServer;
