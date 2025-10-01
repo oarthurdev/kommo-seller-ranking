@@ -60,25 +60,115 @@ WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
   AND atualizado_em <= '2025-09-30 23:59:59'
   AND custom_fields_values IS NOT NULL
   AND custom_fields_values != '[]'
-  AND custom_fields_values != '';
+  AND custom_fields_values != ''
+  AND custom_fields_values != 'null';
 
--- 7. Amostra de custom_fields_values
+-- 7. Amostra de custom_fields_values com análise de conteúdo
 SELECT 
     'Amostra de custom_fields' as teste,
     id as lead_id,
     etapa,
     status_id,
-    LEFT(custom_fields_values::text, 200) as custom_fields_sample
+    LENGTH(custom_fields_values) as tamanho,
+    CASE 
+        WHEN custom_fields_values IS NULL THEN 'NULL'
+        WHEN custom_fields_values = '' THEN 'VAZIO'
+        WHEN custom_fields_values = '[]' THEN 'ARRAY_VAZIO'
+        WHEN custom_fields_values = 'null' THEN 'STRING_NULL'
+        WHEN custom_fields_values ~ '^[[:space:]]*$' THEN 'APENAS_ESPACOS'
+        WHEN custom_fields_values ~ '^[[:space:]]*\[' THEN 'FORMATO_ARRAY'
+        ELSE 'OUTRO_FORMATO'
+    END as tipo_conteudo,
+    LEFT(custom_fields_values, 100) as custom_fields_sample
 FROM leads 
 WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
   AND atualizado_em >= '2025-09-01 00:00:00'
   AND atualizado_em <= '2025-09-30 23:59:59'
   AND custom_fields_values IS NOT NULL
-  AND custom_fields_values != '[]'
-  AND custom_fields_values != ''
-LIMIT 3;
+ORDER BY 
+    CASE 
+        WHEN custom_fields_values ~ '^[[:space:]]*\[' THEN 1
+        ELSE 2
+    END,
+    LENGTH(custom_fields_values) DESC
+LIMIT 5;
 
--- 8. Testar a função RPC com debug
+-- 8. Verificar se há leads perdidos por custom_fields (com validação segura)
+WITH safe_json_leads AS (
+    SELECT 
+        l.id,
+        l.custom_fields_values,
+        CASE 
+            WHEN l.custom_fields_values IS NOT NULL 
+                 AND l.custom_fields_values != '' 
+                 AND l.custom_fields_values != '[]'
+                 AND l.custom_fields_values != 'null'
+                 AND l.custom_fields_values !~ '^[[:space:]]*$'
+                 AND l.custom_fields_values ~ '^[[:space:]]*\[.*\][[:space:]]*$'
+            THEN
+                -- Tentar fazer parse seguro
+                CASE 
+                    WHEN l.custom_fields_values::text ~ '^[[:space:]]*\[.*\][[:space:]]*$'
+                    THEN 
+                        CASE 
+                            WHEN (l.custom_fields_values::jsonb) IS NOT NULL 
+                            THEN l.custom_fields_values::jsonb
+                            ELSE '[]'::jsonb
+                        END
+                    ELSE '[]'::jsonb
+                END
+            ELSE '[]'::jsonb
+        END as parsed_json
+    FROM leads l
+    WHERE l.company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
+      AND l.atualizado_em >= '2025-09-01 00:00:00'
+      AND l.atualizado_em <= '2025-09-30 23:59:59'
+      AND l.custom_fields_values IS NOT NULL 
+      AND l.custom_fields_values != '[]' 
+      AND l.custom_fields_values != ''
+      AND l.custom_fields_values != 'null'
+)
+SELECT 
+    'Leads perdidos por custom_fields' as teste,
+    COUNT(*) as resultado
+FROM safe_json_leads sjl
+WHERE EXISTS (
+    SELECT 1
+    FROM jsonb_array_elements(sjl.parsed_json) AS cf
+    WHERE cf->>'field_name' = 'Perdidos'
+      AND cf->'values'->0->>'value' = 'true'
+);
+
+-- 9. Testar parsing individual de custom_fields com tratamento de erro
+WITH safe_custom_fields AS (
+    SELECT 
+        l.id as lead_id,
+        l.etapa,
+        l.status_id,
+        l.custom_fields_values,
+        CASE 
+            WHEN l.custom_fields_values IS NULL THEN 'NULL'
+            WHEN l.custom_fields_values = '' THEN 'VAZIO'
+            WHEN l.custom_fields_values = '[]' THEN 'ARRAY_VAZIO'
+            WHEN l.custom_fields_values = 'null' THEN 'STRING_NULL'
+            WHEN l.custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$' THEN 'FORMATO_INVALIDO'
+            ELSE 'FORMATO_VALIDO'
+        END as status_parsing
+    FROM leads l
+    WHERE l.company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
+      AND l.atualizado_em >= '2025-09-01 00:00:00'
+      AND l.atualizado_em <= '2025-09-30 23:59:59'
+      AND l.custom_fields_values IS NOT NULL
+)
+SELECT 
+    'Status de parsing dos custom_fields' as teste,
+    status_parsing,
+    COUNT(*) as quantidade
+FROM safe_custom_fields
+GROUP BY status_parsing
+ORDER BY quantidade DESC;
+
+-- 10. Testar a função RPC com debug
 SELECT 
     'Resultado da função RPC' as teste,
     etapa_anterior,
@@ -93,33 +183,26 @@ FROM get_lost_leads_funnel(
     ARRAY[8865067, 8865115]::bigint[]
 );
 
--- 9. Verificar se há leads perdidos por custom_fields
+-- 11. Análise detalhada de leads com custom_fields malformados
 SELECT 
-    'Leads perdidos por custom_fields' as teste,
-    COUNT(*) as resultado
-FROM leads l
-WHERE l.company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
-  AND l.atualizado_em >= '2025-09-01 00:00:00'
-  AND l.atualizado_em <= '2025-09-30 23:59:59'
-  AND l.custom_fields_values IS NOT NULL 
-  AND l.custom_fields_values != '[]' 
-  AND l.custom_fields_values != ''
-  AND EXISTS (
-      SELECT 1
-      FROM jsonb_array_elements(l.custom_fields_values::jsonb) AS cf
-      WHERE cf->>'field_name' = 'Perdidos'
-        AND cf->'values'->0->>'value' = 'true'
-  );
-
--- 10. Testar parsing de um custom_field específico
-SELECT 
-    'Teste de parsing custom_fields' as teste,
+    'Análise de leads com JSON malformado' as teste,
     id as lead_id,
-    jsonb_array_elements(custom_fields_values::jsonb)->>'field_name' as field_name,
-    jsonb_array_elements(custom_fields_values::jsonb)->'values'->0->>'value' as field_value
-FROM leads l
-WHERE l.company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
-  AND l.custom_fields_values IS NOT NULL 
-  AND l.custom_fields_values != '[]' 
-  AND l.custom_fields_values != ''
-LIMIT 10;
+    etapa,
+    status_id,
+    LENGTH(custom_fields_values) as tamanho_campo,
+    SUBSTRING(custom_fields_values, 1, 1) as primeiro_char,
+    SUBSTRING(custom_fields_values, LENGTH(custom_fields_values), 1) as ultimo_char,
+    custom_fields_values as conteudo_completo
+FROM leads 
+WHERE company_id = '0a3157ce-6591-4357-b663-0e4d333d06a5'
+  AND atualizado_em >= '2025-09-01 00:00:00'
+  AND atualizado_em <= '2025-09-30 23:59:59'
+  AND custom_fields_values IS NOT NULL
+  AND custom_fields_values != ''
+  AND custom_fields_values != '[]'
+  AND custom_fields_values != 'null'
+  AND (
+      custom_fields_values !~ '^[[:space:]]*\[.*\][[:space:]]*$'
+      OR LENGTH(custom_fields_values) < 3
+  )
+LIMIT 5;
