@@ -17,7 +17,17 @@ RETURNS TABLE(
 ) 
 LANGUAGE plpgsql
 AS $$
+DECLARE
+    leads_filtrados_count INTEGER;
+    leads_perdidos_count INTEGER;
+    etapas_company_count INTEGER;
+    etapas_anteriores_count INTEGER;
+    debug_info TEXT;
 BEGIN
+    -- Debug: Log dos parâmetros recebidos
+    RAISE NOTICE 'DEBUG: Parâmetros recebidos - company_id: %, start: %, end: %, stage_name: %, broker_id: %, pipeline_ids: %', 
+        p_company_id, p_start, p_end, p_stage_name, p_broker_id, p_pipeline_ids;
+
     RETURN QUERY
     WITH leads_filtrados AS (
         SELECT 
@@ -37,9 +47,13 @@ BEGIN
           AND (p_broker_id IS NULL OR l.responsavel_id = p_broker_id)
           AND (p_pipeline_ids IS NULL OR l.pipeline_id = ANY(p_pipeline_ids))
     ),
+    debug_leads_filtrados AS (
+        SELECT *, (SELECT COUNT(*) FROM leads_filtrados) as total_filtrados
+        FROM leads_filtrados
+    ),
     leads_perdidos AS (
         SELECT lf.*
-        FROM leads_filtrados lf
+        FROM debug_leads_filtrados lf
         WHERE lf.status_id = 143  -- Status perdido
            OR lf.etapa = p_stage_name
            OR lf.etapa ILIKE '%perdido%'
@@ -56,6 +70,10 @@ BEGIN
                )
            )
     ),
+    debug_leads_perdidos AS (
+        SELECT *, (SELECT COUNT(*) FROM leads_perdidos) as total_perdidos
+        FROM leads_perdidos
+    ),
     -- Buscar etapas dinamicamente da tabela stages_list
     etapas_company AS (
         SELECT 
@@ -71,10 +89,16 @@ BEGIN
           AND stage_name NOT ILIKE '%perdido%'
           AND stage_name NOT ILIKE '%lost%'
     ),
+    debug_etapas_company AS (
+        SELECT *, (SELECT COUNT(*) FROM etapas_company) as total_etapas
+        FROM etapas_company
+    ),
     etapas_anteriores AS (
         SELECT 
             lp.id as lead_id,
             lp.valor,
+            lp.custom_fields_values,
+            lp.etapa as etapa_atual,
             CASE 
                 WHEN lp.custom_fields_values IS NOT NULL 
                      AND lp.custom_fields_values != '[]' 
@@ -84,7 +108,7 @@ BEGIN
                     -- Buscar nos custom fields quais etapas estão marcadas como true
                     (
                         SELECT ec.stage_name
-                        FROM etapas_company ec
+                        FROM debug_etapas_company ec
                         WHERE EXISTS (
                             SELECT 1
                             FROM jsonb_array_elements(lp.custom_fields_values::jsonb) AS cf
@@ -104,14 +128,18 @@ BEGIN
                              AND lp.etapa NOT ILIKE '%perdido%'
                              AND lp.etapa NOT ILIKE '%lost%'
                              AND EXISTS (
-                                 SELECT 1 FROM etapas_company ec 
+                                 SELECT 1 FROM debug_etapas_company ec 
                                  WHERE ec.stage_name = lp.etapa
                              )
                         THEN lp.etapa
                         ELSE NULL
                     END
             END as etapa_anterior
-        FROM leads_perdidos lp
+        FROM debug_leads_perdidos lp
+    ),
+    debug_etapas_anteriores AS (
+        SELECT *, (SELECT COUNT(*) FROM etapas_anteriores) as total_etapas_anteriores
+        FROM etapas_anteriores
     )
     SELECT 
         ea.etapa_anterior,
@@ -123,12 +151,57 @@ BEGIN
                 ELSE 0
             END
         ), 0) as total_value
-    FROM etapas_anteriores ea
+    FROM debug_etapas_anteriores ea
     WHERE ea.etapa_anterior IS NOT NULL 
       AND ea.etapa_anterior != ''
       AND ea.etapa_anterior != p_stage_name
       AND ea.etapa_anterior != 'Perdidos'
     GROUP BY ea.etapa_anterior
     ORDER BY total DESC;
+
+    -- Debug: Contar registros em cada etapa
+    SELECT COUNT(*) INTO leads_filtrados_count FROM leads l 
+    WHERE l.company_id = p_company_id 
+      AND l.atualizado_em >= p_start 
+      AND l.atualizado_em <= p_end 
+      AND (p_broker_id IS NULL OR l.responsavel_id = p_broker_id)
+      AND (p_pipeline_ids IS NULL OR l.pipeline_id = ANY(p_pipeline_ids));
+
+    SELECT COUNT(*) INTO etapas_company_count FROM stages_list 
+    WHERE company_id = p_company_id 
+      AND stage_name IS NOT NULL 
+      AND stage_name != '' 
+      AND stage_name != p_stage_name;
+
+    RAISE NOTICE 'DEBUG: Leads filtrados: %, Etapas da empresa: %', 
+        leads_filtrados_count, etapas_company_count;
+
+    -- Debug: Mostrar algumas etapas da empresa
+    FOR debug_info IN 
+        SELECT 'Etapa: ' || stage_name || ' (ID: ' || stage_id || ')' 
+        FROM stages_list 
+        WHERE company_id = p_company_id 
+          AND stage_name IS NOT NULL 
+          AND stage_name != '' 
+        LIMIT 10
+    LOOP
+        RAISE NOTICE 'DEBUG: %', debug_info;
+    END LOOP;
+
+    -- Debug: Mostrar alguns leads perdidos com custom_fields
+    FOR debug_info IN 
+        SELECT 'Lead ID: ' || l.id || ', Etapa: ' || COALESCE(l.etapa, 'NULL') || 
+               ', Status: ' || l.status_id || ', Custom fields presente: ' || 
+               CASE WHEN l.custom_fields_values IS NOT NULL THEN 'SIM' ELSE 'NÃO' END
+        FROM leads l 
+        WHERE l.company_id = p_company_id 
+          AND l.atualizado_em >= p_start 
+          AND l.atualizado_em <= p_end 
+          AND (l.status_id = 143 OR l.etapa ILIKE '%perdido%')
+        LIMIT 5
+    LOOP
+        RAISE NOTICE 'DEBUG: %', debug_info;
+    END LOOP;
+
 END;
 $$;
