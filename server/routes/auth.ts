@@ -1,7 +1,9 @@
 import { Request, Response } from "express";
 import { supabase } from "../supabase";
 
-const bcrypt = require('bcrypt');
+import bcrypt from "bcrypt";
+
+// const bcrypt = require('bcrypt');
 
 export async function loginAuth(req: Request, res: Response) {
   try {
@@ -17,7 +19,7 @@ export async function loginAuth(req: Request, res: Response) {
     }
 
     console.log(`Tentativa de login para companyId: ${companyId}`);
-    console.log("Senha fornecida:", password)
+    console.log("Senha fornecida:", password);
 
     // Buscar configuração de autenticação da empresa
     const { data: authConfig, error } = await supabase
@@ -27,7 +29,7 @@ export async function loginAuth(req: Request, res: Response) {
       .single();
 
     const isMatch = await bcrypt.compare(password, authConfig?.password || "");
-    
+
     console.log("Configuração de autenticação encontrada:", authConfig);
     console.log("Erro ao buscar configuração de autenticação:", error);
 
