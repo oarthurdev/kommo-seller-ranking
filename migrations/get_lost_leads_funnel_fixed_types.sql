@@ -1,6 +1,5 @@
 
-
--- Função corrigida get_lost_leads_funnel usando custom_fields_values
+-- Função corrigida get_lost_leads_funnel usando stages_list dinâmicamente
 -- Determina a etapa anterior baseada na hierarquia dos custom fields
 
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
@@ -12,7 +11,7 @@ CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_pipeline_ids BIGINT[] DEFAULT NULL
 ) 
 RETURNS TABLE(
-    etapa_anterior CHARACTER VARYING,
+    etapa_anterior TEXT,
     total INTEGER,
     total_value NUMERIC
 ) 
@@ -45,24 +44,25 @@ BEGIN
            OR lf.etapa = p_stage_name
            OR lf.etapa ILIKE '%perdido%'
            OR lf.etapa ILIKE '%lost%'
-           OR (lf.custom_fields_values::jsonb ? 'Perdidos' 
+           OR (lf.custom_fields_values IS NOT NULL 
+               AND lf.custom_fields_values != '{}' 
+               AND lf.custom_fields_values::jsonb ? 'Perdidos' 
                AND lf.custom_fields_values::jsonb->>'Perdidos' = 'true')
     ),
-    -- Mapear as etapas em ordem hierárquica baseado na imagem
-    etapas_hierarquia AS (
-        SELECT etapa_nome, ordem FROM (
-            VALUES 
-                ('Sem contato', 1),
-                ('Contato feito', 2),
-                ('Aquecendo', 3),
-                ('Agendamento/Reunião', 4),
-                ('Crédito', 5),
-                ('Visita Imóvel', 6),
-                ('Proposta', 7),
-                ('contrato', 8),
-                ('Aprovado', 9),
-                ('ganho', 10)
-        ) AS etapas(etapa_nome, ordem)
+    -- Buscar etapas dinamicamente da tabela stages_list
+    etapas_company AS (
+        SELECT 
+            stage_name,
+            stage_id,
+            -- Criar uma ordem baseada no stage_id (assumindo que IDs menores = etapas anteriores)
+            ROW_NUMBER() OVER (ORDER BY stage_id) as ordem
+        FROM stages_list 
+        WHERE company_id = p_company_id
+          AND stage_name IS NOT NULL
+          AND stage_name != ''
+          AND stage_name != p_stage_name  -- Excluir a própria etapa "Perdidos"
+          AND stage_name NOT ILIKE '%perdido%'
+          AND stage_name NOT ILIKE '%lost%'
     ),
     etapas_anteriores AS (
         SELECT 
@@ -75,33 +75,39 @@ BEGIN
                      AND lp.custom_fields_values::jsonb->>'Perdidos' = 'true'
                 THEN
                     -- Encontrar a última etapa marcada como true (maior ordem)
+                    -- Buscar nos custom fields quais etapas estão marcadas como true
                     (
-                        SELECT eh.etapa_nome
-                        FROM etapas_hierarquia eh
-                        WHERE lp.custom_fields_values::jsonb ? eh.etapa_nome
-                          AND lp.custom_fields_values::jsonb->>eh.etapa_nome = 'true'
-                        ORDER BY eh.ordem DESC
+                        SELECT ec.stage_name
+                        FROM etapas_company ec
+                        WHERE lp.custom_fields_values::jsonb ? ec.stage_name
+                          AND lp.custom_fields_values::jsonb->>ec.stage_name = 'true'
+                        ORDER BY ec.ordem DESC
                         LIMIT 1
                     )
                 WHEN lp.custom_fields_values IS NOT NULL 
                      AND lp.custom_fields_values != '{}'
                 THEN
-                    -- Se não tem "Perdidos" = true, usar a última etapa true encontrada
+                    -- Se não tem "Perdidos" = true, mas tem custom fields,
+                    -- buscar a última etapa true encontrada
                     (
-                        SELECT eh.etapa_nome
-                        FROM etapas_hierarquia eh
-                        WHERE lp.custom_fields_values::jsonb ? eh.etapa_nome
-                          AND lp.custom_fields_values::jsonb->>eh.etapa_nome = 'true'
-                        ORDER BY eh.ordem DESC
+                        SELECT ec.stage_name
+                        FROM etapas_company ec
+                        WHERE lp.custom_fields_values::jsonb ? ec.stage_name
+                          AND lp.custom_fields_values::jsonb->>ec.stage_name = 'true'
+                        ORDER BY ec.ordem DESC
                         LIMIT 1
                     )
                 ELSE
-                    -- Fallback: usar etapa atual do lead
+                    -- Fallback: usar etapa atual do lead se válida
                     CASE 
                         WHEN lp.etapa IS NOT NULL 
                              AND lp.etapa != p_stage_name 
                              AND lp.etapa NOT ILIKE '%perdido%'
                              AND lp.etapa NOT ILIKE '%lost%'
+                             AND EXISTS (
+                                 SELECT 1 FROM etapas_company ec 
+                                 WHERE ec.stage_name = lp.etapa
+                             )
                         THEN lp.etapa
                         ELSE NULL
                     END
@@ -109,7 +115,7 @@ BEGIN
         FROM leads_perdidos lp
     )
     SELECT 
-        ea.etapa_anterior,
+        ea.etapa_anterior::TEXT,
         COUNT(DISTINCT ea.lead_id)::INTEGER as total,
         COALESCE(SUM(
             CASE 
@@ -127,4 +133,3 @@ BEGIN
     ORDER BY total DESC;
 END;
 $$;
-
