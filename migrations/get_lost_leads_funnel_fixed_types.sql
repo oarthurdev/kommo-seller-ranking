@@ -1,5 +1,5 @@
 
--- Função corrigida get_lost_leads_funnel com tipos corretos
+-- Função corrigida get_lost_leads_funnel com tratamento robusto de JSONB
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_company_id UUID,
     p_start TIMESTAMP,
@@ -69,18 +69,11 @@ BEGIN
                     SELECT ec.stage_name
                     FROM etapas_company ec
                     WHERE lp.custom_fields_values IS NOT NULL
-                      AND lp.custom_fields_values::text != ''
-                      AND lp.custom_fields_values::text != '[]'
-                      AND lp.custom_fields_values::text != 'null'
+                      AND jsonb_typeof(lp.custom_fields_values) = 'array'
+                      AND jsonb_array_length(lp.custom_fields_values) > 0
                       AND EXISTS (
                           SELECT 1
-                          FROM jsonb_array_elements(
-                              CASE 
-                                  WHEN lp.custom_fields_values::text ~ '^".*"$'
-                                  THEN (TRIM(BOTH '"' FROM lp.custom_fields_values::text))::jsonb
-                                  ELSE lp.custom_fields_values::jsonb
-                              END
-                          ) AS cf
+                          FROM jsonb_array_elements(lp.custom_fields_values) AS cf
                           WHERE cf->>'field_name' = ec.stage_name
                             AND cf->>'field_type' = 'checkbox'
                             AND cf->'values'->0->>'value' = 'true'
