@@ -455,7 +455,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {(brokerPoints?.ticket_medio || 0) > 0
+                    {brokerPoints?.vendas_fechadas && brokerPoints?.vendas_fechadas > 0 && (brokerPoints?.ticket_medio || 0) > 0
                       ? `R$ ${((brokerPoints?.ticket_medio || 0) / 1000).toFixed(0)}k`
                       : "R$ 0"}
                   </p>
