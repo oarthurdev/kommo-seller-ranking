@@ -26,8 +26,7 @@ BEGIN
             l.etapa,
             l.status_id,
             l.atualizado_em,
-            l.criado_em,
-            l.custom_fields_values
+            l.criado_em
         FROM leads l
         WHERE l.company_id = p_company_id
           AND l.atualizado_em >= p_start
@@ -50,8 +49,27 @@ BEGIN
             lp.id as lead_id,
             lp.valor,
             COALESCE(
-                -- Buscar da atividade de mudança de status usando status_anterior
-                a.status_anterior,
+                -- Buscar stage_name da tabela stages_list usando status_anterior da atividade
+                (
+                    SELECT sl.stage_name
+                    FROM activities a
+                    INNER JOIN stages_list sl ON sl.stage_id = CASE 
+                        WHEN a.status_anterior ~ '^\d+$' THEN a.status_anterior::BIGINT 
+                        ELSE NULL 
+                    END
+                    WHERE a.lead_id = lp.id
+                      AND a.company_id = p_company_id
+                      AND a.tipo = 'lead'
+                      AND a.status_novo = 143
+                      AND a.status_anterior IS NOT NULL
+                      AND a.status_anterior != ''
+                      AND a.status_anterior ~ '^\d+$'
+                      AND sl.company_id = p_company_id
+                      AND sl.stage_name NOT ILIKE '%perdido%'
+                      AND sl.stage_name NOT ILIKE '%lost%'
+                    ORDER BY a.criado_em DESC
+                    LIMIT 1
+                ),
                 -- Fallback para a etapa atual se não for perdido
                 CASE 
                     WHEN lp.etapa NOT ILIKE '%perdido%' 
@@ -61,15 +79,7 @@ BEGIN
                 END
             ) as etapa_anterior
         FROM leads_perdidos lp
-        LEFT JOIN activities a ON a.lead_id = lp.id
-            AND a.company_id = p_company_id
-            AND a.tipo = 'lead'
-            AND a.status_novo = 143
-            AND a.status_anterior IS NOT NULL
-            AND a.status_anterior != ''
-            AND a.status_anterior NOT ILIKE '%perdido%'
-            AND a.status_anterior NOT ILIKE '%lost%'
-        ORDER BY lp.id, a.criado_em DESC NULLS LAST
+        ORDER BY lp.id
     ),
     -- Validar etapas contra stages_list
     etapas_validadas AS (
@@ -89,13 +99,8 @@ BEGIN
                  WHERE sl.company_id = p_company_id 
                    AND LOWER(sl.stage_name) = LOWER(uev.etapa_anterior)
                  LIMIT 1),
-                -- Se não encontrar, usar a primeira etapa do pipeline como fallback
-                (SELECT sl.stage_name 
-                 FROM stages_list sl 
-                 WHERE sl.company_id = p_company_id
-                   AND (p_pipeline_ids IS NULL OR sl.pipeline_id = ANY(p_pipeline_ids))
-                 ORDER BY sl.pipeline_id, sl.position
-                 LIMIT 1)
+                -- Se não encontrar, usar a etapa original
+                uev.etapa_anterior
             )::TEXT as etapa_anterior
         FROM ultima_etapa_valida uev
         WHERE uev.etapa_anterior IS NOT NULL
