@@ -53,17 +53,14 @@ BEGIN
                 (
                     SELECT sl.stage_name
                     FROM activities a
-                    INNER JOIN stages_list sl ON sl.stage_id = CASE 
-                        WHEN a.status_anterior ~ '^\d+$' THEN a.status_anterior::BIGINT 
-                        ELSE NULL 
-                    END
+                    INNER JOIN stages_list sl ON sl.stage_id = (a.status_anterior::TEXT)::BIGINT
                     WHERE a.lead_id = lp.id
                       AND a.company_id = p_company_id
                       AND a.tipo = 'lead'
                       AND a.status_novo = 143
                       AND a.status_anterior IS NOT NULL
-                      AND a.status_anterior != ''
-                      AND a.status_anterior ~ '^\d+$'
+                      AND a.status_anterior::TEXT != ''
+                      AND a.status_anterior::TEXT ~ '^\d+$'
                       AND sl.company_id = p_company_id
                       AND sl.stage_name NOT ILIKE '%perdido%'
                       AND sl.stage_name NOT ILIKE '%lost%'
