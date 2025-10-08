@@ -455,7 +455,9 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.vendas_fechadas && brokerPoints?.vendas_fechadas > 0 && (brokerPoints?.ticket_medio || 0) > 0
+                    {brokerPoints?.vendas_realizadas &&
+                    brokerPoints?.vendas_realizadas > 0 &&
+                    (brokerPoints?.ticket_medio || 0) > 0
                       ? `R$ ${((brokerPoints?.ticket_medio || 0) / 1000).toFixed(0)}k`
                       : "R$ 0"}
                   </p>
@@ -479,7 +481,7 @@ export function BrokerProfilePage() {
                       : "R$ 0"}
                   </p>
                 </Card>
-                
+
                 <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50 hover:border-gray-600/50 transition-all duration-200">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-lg bg-red-500/20 flex items-center justify-center">
@@ -632,7 +634,7 @@ export function BrokerProfilePage() {
                     <div className="h-8 bg-gray-700 rounded w-20"></div>
                   </div>
                   <div className="space-y-3">
-                    {[1, 2, 3].map(i => (
+                    {[1, 2, 3].map((i) => (
                       <div key={i} className="h-16 bg-gray-700 rounded"></div>
                     ))}
                   </div>
@@ -640,7 +642,9 @@ export function BrokerProfilePage() {
               ) : lostLeadsError ? (
                 <div className="text-center py-8">
                   <div className="text-red-400 mb-2">❌</div>
-                  <p className="text-gray-400">Erro ao carregar leads perdidos</p>
+                  <p className="text-gray-400">
+                    Erro ao carregar leads perdidos
+                  </p>
                   <p className="text-xs text-gray-500 mt-1">
                     {lostLeadsError.message}
                   </p>
