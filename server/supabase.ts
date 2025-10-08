@@ -563,8 +563,9 @@ async function calculateBrokerMetricsAllPipelines(
     // Ticket médio só deve existir se houver vendas fechadas
     const ticketMedio =
       vendasFechadas.length > 0 ? parseFloat((vgvPeriodo / vendasFechadas.length).toFixed(2)) : 0;
+    // Taxa de conversão só deve existir se houver vendas fechadas
     const taxaConversao =
-      totalLeads > 0 ? (vendasFechadas.length / totalLeads) * 100 : 0;
+      vendasFechadas.length > 0 && totalLeads > 0 ? parseFloat(((vendasFechadas.length / totalLeads) * 100).toFixed(2)) : 0;
 
     return {
       vendas_fechadas: vendasFechadas.length,

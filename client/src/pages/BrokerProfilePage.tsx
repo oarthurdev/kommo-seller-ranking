@@ -529,7 +529,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.taxa_conversao
+                    {brokerPoints?.vendas_realizadas && brokerPoints?.vendas_realizadas > 0 && brokerPoints?.taxa_conversao
                       ? `${brokerPoints.taxa_conversao.toFixed(1)}%`
                       : "0%"}
                   </p>
