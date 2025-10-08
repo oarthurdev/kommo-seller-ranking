@@ -2345,6 +2345,15 @@ export async function getLostLeadsByStage(
     }
 
     // Usar a função RPC para buscar leads perdidos por etapa anterior
+    console.log("Chamando RPC get_lost_leads_funnel com parâmetros:", {
+      p_company_id: companyId,
+      p_start: currentPeriodStartUTC.toISOString(),
+      p_end: currentPeriodEndUTC.toISOString(),
+      p_stage_name: lostStageName,
+      p_broker_id: brokerId ? parseInt(brokerId) : null,
+      p_pipeline_ids: availablePipelineIds,
+    });
+
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
       "get_lost_leads_funnel",
       {
@@ -2365,6 +2374,7 @@ export async function getLostLeadsByStage(
     console.log(
       `RPC retornou ${rpcResult?.length || 0} etapas com leads perdidos`,
     );
+    console.log("Dados brutos da RPC:", JSON.stringify(rpcResult, null, 2));
 
     // Processar resultado da RPC
     const lostByPreviousStage: {
@@ -2380,7 +2390,11 @@ export async function getLostLeadsByStage(
 
     if (rpcResult && Array.isArray(rpcResult)) {
       for (const row of rpcResult) {
-        if (!row.etapa_anterior || row.total <= 0) continue;
+        console.log("Processando linha:", row);
+        if (!row.etapa_anterior || row.total <= 0) {
+          console.log("Linha ignorada: etapa vazia ou total zero");
+          continue;
+        }
 
         const assignedColor =
           LOST_LEADS_STAGE_COLORS[colorIndex % LOST_LEADS_STAGE_COLORS.length];
