@@ -50,8 +50,8 @@ BEGIN
             lp.id as lead_id,
             lp.valor,
             COALESCE(
-                -- Tentar buscar da atividade de mudança de status
-                a.valor_anterior,
+                -- Buscar da atividade de mudança de status usando status_anterior
+                a.status_anterior,
                 -- Fallback para a etapa atual se não for perdido
                 CASE 
                     WHEN lp.etapa NOT ILIKE '%perdido%' 
@@ -65,10 +65,10 @@ BEGIN
             AND a.company_id = p_company_id
             AND a.tipo = 'lead'
             AND a.status_novo = 143
-            AND a.valor_anterior IS NOT NULL
-            AND a.valor_anterior != ''
-            AND a.valor_anterior NOT ILIKE '%perdido%'
-            AND a.valor_anterior NOT ILIKE '%lost%'
+            AND a.status_anterior IS NOT NULL
+            AND a.status_anterior != ''
+            AND a.status_anterior NOT ILIKE '%perdido%'
+            AND a.status_anterior NOT ILIKE '%lost%'
         ORDER BY lp.id, a.criado_em DESC NULLS LAST
     ),
     -- Validar etapas contra stages_list
