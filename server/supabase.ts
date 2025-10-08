@@ -2310,24 +2310,39 @@ export async function getLostLeadsByStage(
       return {};
     }
 
-    // Buscar nome do stage perdido (stage_id = 143)
-    const { data: stageRow, error: stageError } = await supabase
+    // Verificar quantos leads perdidos existem no período
+    const { data: lostLeadsCheck, error: checkError } = await supabase
+      .from("leads")
+      .select("id, etapa, status_id")
+      .eq("company_id", companyId)
+      .in("pipeline_id", availablePipelineIds)
+      .gte("atualizado_em", currentPeriodStartUTC.toISOString())
+      .lte("atualizado_em", currentPeriodEndUTC.toISOString())
+      .eq("status_id", 143);
+
+    console.log(`Total de leads perdidos encontrados: ${lostLeadsCheck?.length || 0}`);
+    if (brokerId) {
+      const brokerLostLeads = lostLeadsCheck?.filter(
+        (l) => l.responsavel_id === parseInt(brokerId)
+      );
+      console.log(`Leads perdidos do corretor ${brokerId}: ${brokerLostLeads?.length || 0}`);
+    }
+
+    // Buscar nome do stage perdido - tentar várias abordagens
+    let lostStageName = "Perdidos";
+    const { data: stageRow } = await supabase
       .from("stages_list")
       .select("stage_name")
       .eq("company_id", companyId)
       .eq("stage_id", 143)
-      .single();
+      .maybeSingle();
 
-    console.log("STAGE PERDIDO ID:", stageRow);
-
-    if (stageError || !stageRow) {
-      console.error("Erro ao buscar stage_name perdido:", stageError);
-      return {};
+    if (stageRow?.stage_name) {
+      lostStageName = stageRow.stage_name;
+      console.log("Stage perdido encontrado:", lostStageName);
+    } else {
+      console.log("Usando nome padrão para stage perdido:", lostStageName);
     }
-
-    const lostStageName = stageRow.stage_name;
-
-    console.log("LOST STAGE NAME:", lostStageName);
 
     // Usar a função RPC para buscar leads perdidos por etapa anterior
     const { data: rpcResult, error: rpcError } = await supabase.rpc(
@@ -2375,7 +2390,7 @@ export async function getLostLeadsByStage(
           count: row.total,
           totalValue: row.total_value || 0,
           color: assignedColor,
-          pipeline_id: availablePipelineIds[0], // Usar primeiro pipeline como padrão
+          pipeline_id: availablePipelineIds[0],
         };
 
         console.log(
