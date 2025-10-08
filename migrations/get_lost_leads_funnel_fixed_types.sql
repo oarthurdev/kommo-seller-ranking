@@ -51,24 +51,25 @@ BEGIN
             COALESCE(
                 -- Buscar stage_name da tabela stages_list usando status_anterior da atividade
                 (
-                    SELECT sl.stage_name
-                    FROM activities a
-                    INNER JOIN stages_list sl ON sl.stage_id = 
-                        CASE 
-                            WHEN a.status_anterior ~ '^\d+$' THEN a.status_anterior::BIGINT
-                            ELSE NULL
-                        END
-                    WHERE a.lead_id = lp.id
-                      AND a.company_id = p_company_id
-                      AND a.tipo = 'lead'
-                      AND a.status_novo = 143
-                      AND a.status_anterior IS NOT NULL
-                      AND a.status_anterior != ''
-                      AND sl.company_id = p_company_id
-                      AND sl.stage_name NOT ILIKE '%perdido%'
-                      AND sl.stage_name NOT ILIKE '%lost%'
-                    ORDER BY a.criado_em DESC
-                    LIMIT 1
+                SELECT sl.stage_name
+                FROM activities a
+                JOIN LATERAL (
+                    SELECT a.status_anterior::BIGINT AS status_anterior_bigint
+                    WHERE a.status_anterior IS NOT NULL
+                      AND a.status_anterior::TEXT != ''
+                      AND a.status_anterior::TEXT ~ '^\d+$'
+                ) safe_cast ON TRUE
+                INNER JOIN stages_list sl 
+                    ON sl.stage_id = safe_cast.status_anterior_bigint
+                WHERE a.lead_id = lp.id
+                  AND a.company_id = p_company_id
+                  AND a.tipo = 'lead'
+                  AND a.status_novo = 143
+                  AND sl.company_id = p_company_id
+                  AND sl.stage_name NOT ILIKE '%perdido%'
+                  AND sl.stage_name NOT ILIKE '%lost%'
+                ORDER BY a.criado_em DESC
+                LIMIT 1
                 ),
                 -- Fallback para a etapa atual se não for perdido
                 CASE 
