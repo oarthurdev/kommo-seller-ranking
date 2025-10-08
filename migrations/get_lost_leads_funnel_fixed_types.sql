@@ -1,6 +1,5 @@
--- Função corrigida get_lost_leads_funnel com identificação melhorada de leads perdidos
--- A coluna custom_fields_values contém um array JSON com informações das etapas
 
+-- Função corrigida get_lost_leads_funnel com tipos corretos
 CREATE OR REPLACE FUNCTION get_lost_leads_funnel(
     p_company_id UUID,
     p_start TIMESTAMP,
@@ -36,11 +35,11 @@ BEGIN
           AND (p_broker_id IS NULL OR l.responsavel_id = p_broker_id)
           AND (p_pipeline_ids IS NULL OR l.pipeline_id = ANY(p_pipeline_ids))
     ),
-    -- Identificar leads perdidos de forma mais flexível
+    -- Identificar leads perdidos
     leads_perdidos AS (
         SELECT lf.*
         FROM leads_filtrados lf
-        WHERE lf.status_id = 143  -- Status perdido
+        WHERE lf.status_id = 143
            OR lf.etapa ILIKE '%perdido%'
            OR lf.etapa ILIKE '%lost%'
            OR lf.etapa ILIKE 'perdidos'
@@ -48,7 +47,7 @@ BEGIN
     -- Buscar etapas válidas da empresa (excluindo perdidos)
     etapas_company AS (
         SELECT 
-            stage_name,
+            stage_name::TEXT,
             stage_id,
             ROW_NUMBER() OVER (ORDER BY stage_id) as ordem
         FROM stages_list 
@@ -91,7 +90,7 @@ BEGIN
                 ),
                 -- Fallback: buscar a última etapa válida que o lead teve antes de perder
                 (
-                    SELECT l2.etapa
+                    SELECT l2.etapa::TEXT
                     FROM leads l2
                     WHERE l2.id = lp.id
                       AND l2.company_id = p_company_id
@@ -100,7 +99,7 @@ BEGIN
                       AND l2.etapa NOT ILIKE '%lost%'
                       AND EXISTS (
                           SELECT 1 FROM etapas_company ec 
-                          WHERE ec.stage_name = l2.etapa
+                          WHERE ec.stage_name = l2.etapa::TEXT
                       )
                     ORDER BY l2.atualizado_em DESC
                     LIMIT 1
@@ -112,11 +111,11 @@ BEGIN
                     WHERE ec.ordem = 1
                     LIMIT 1
                 )
-            ) as etapa_anterior
+            )::TEXT as etapa_anterior
         FROM leads_perdidos lp
     )
     SELECT 
-        ea.etapa_anterior,
+        ea.etapa_anterior::TEXT,
         COUNT(DISTINCT ea.lead_id)::INTEGER as total,
         COALESCE(SUM(
             CASE 
@@ -124,11 +123,11 @@ BEGIN
                 WHEN ea.valor::text ~ '^[0-9]+\.?[0-9]*$' THEN ea.valor::NUMERIC
                 ELSE 0
             END
-        ), 0) as total_value
+        ), 0)::NUMERIC as total_value
     FROM etapas_anteriores ea
     WHERE ea.etapa_anterior IS NOT NULL 
       AND ea.etapa_anterior != ''
-    GROUP BY ea.etapa_anterior
+    GROUP BY ea.etapa_anterior::TEXT
     HAVING COUNT(DISTINCT ea.lead_id) > 0
     ORDER BY total DESC;
 
