@@ -7,6 +7,7 @@ import {
   getTotalSales,
   getLeadsByStageCurrentMonth,
   getTotalLeads,
+  getCountTotalSales,
   updateComponentFilter,
   processMonthlyRetrospectives,
   saveMonthlyRetrospective,
@@ -950,12 +951,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       );
 
       // Buscar métricas baseadas em leads que ENTRARAM no período selecionado
-      const [totalLeads, activeBrokers, maxPoints, totalSales] =
+      const [totalLeads, activeBrokers, maxPoints, totalSales, countTotalSales] =
         await Promise.all([
           getTotalLeads(companyId, startDate, endDate),
           getActiveBrokers(companyId),
           getMaxPoints(companyId, startDate, endDate),
           getTotalSales(companyId, undefined, startDate, endDate),
+          getCountTotalSales(companyId, undefined, startDate, endDate)
         ]);
 
       console.log(
@@ -967,6 +969,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         activeBrokers,
         maxPoints,
         totalSales,
+        countTotalSales
       });
     } catch (error) {
       console.error("Erro ao buscar métricas do dashboard:", error);

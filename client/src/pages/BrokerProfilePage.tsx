@@ -33,6 +33,46 @@ import { useBranding } from "@/lib/brandingContext";
 import { useUnifiedFilter } from "@/lib/unifiedFilterContext";
 import { getServerBaseUrl } from "@/lib/utils";
 
+// Função helper para formatar valores monetários
+function formatCurrency(value: number | undefined | null): string {
+  if (!value || value === 0) return "R$ 0,00";
+  
+  if (value >= 1000000) {
+    return `R$ ${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(value / 1000000)}M`;
+  }
+  if (value >= 1000) {
+    return `R$ ${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 1 }).format(value / 1000)}k`;
+  }
+  return `R$ ${new Intl.NumberFormat('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value)}`;
+}
+
+// Função helper para formatar tempo de inatividade
+function formatInactivityTime(lastActivityTime: string | null | undefined): string {
+  if (!lastActivityTime) return "Ativo";
+
+  try {
+    const lastActivityDate = new Date(lastActivityTime);
+    const now = new Date();
+    const diffMs = now.getTime() - lastActivityDate.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 1) return "Agora";
+    if (diffMins < 60) return `${diffMins}m`;
+    if (diffHours < 24) return `${diffHours}h ${diffMins % 60}m`;
+    if (diffDays < 7) return `${diffDays}d ${diffHours % 24}h`;
+    if (diffDays < 30) {
+      const weeks = Math.floor(diffDays / 7);
+      return `${weeks}s ${diffDays % 7}d`;
+    }
+    const months = Math.floor(diffDays / 30);
+    return `${months}m ${diffDays % 30}d`;
+  } catch {
+    return "N/A";
+  }
+}
+
 export function BrokerProfilePage() {
   const { id } = useParams() as { id: string };
   const brokerId = parseInt(id);
@@ -118,6 +158,7 @@ export function BrokerProfilePage() {
     vendas_fechadas?: number;
     angariacoes?: number;
     taxa_conversao?: number;
+    leads_perdidos?: number;
   };
   type RankPosition = Awaited<ReturnType<typeof getBrokerRankPosition>>;
   type Lead = Awaited<ReturnType<typeof getBrokerLeads>>[number];
@@ -133,19 +174,25 @@ export function BrokerProfilePage() {
     queryKey: ["broker", brokerId],
     queryFn: async () => {
       const res = await fetch(getServerBaseUrl() + `/api/brokers/${brokerId}`);
-      if (res.status === 204) return null;
-      if (!res.ok) throw new Error("Erro ao buscar corretor");
+      if (!res.ok) {
+        if (res.status === 404) {
+          // Broker não encontrado ou inativo - retorna null e deixa o useEffect redirecionar
+          return null;
+        }
+        throw new Error("Erro ao buscar corretor");
+      }
       return await res.json();
     },
     enabled: isHydrated && !!brokerId && !isNaN(brokerId),
   });
 
   useEffect(() => {
-    if (
-      broker === null ||
-      brokerErr?.message === "Corretor inativo ou não encontrado"
-    ) {
-      navigate("/ranking");
+    if (broker === null && brokerErr === null) {
+      // Só redireciona se a query retornou explicitamente null (broker não encontrado)
+      navigate("/");
+    } else if (brokerErr) {
+      // Log de erro mas não redireciona automaticamente
+      console.warn("Erro ao buscar broker:", brokerErr);
     }
   }, [broker, brokerErr, navigate]);
 
@@ -177,26 +224,6 @@ export function BrokerProfilePage() {
 
   // --------- Leads com ticket ----------
   const effectiveLeadsFilter = effectiveMetricsFilter; // compartilha com métricas
-  const { data: leadsData, error: leadsErr } = useQuery<{
-    tempo_medio_resposta: string;
-    leads: Lead[];
-    ticket_medio: number;
-    vendas_fechadas: number;
-    vgv_mes: number;
-  }>({
-    queryKey: ["brokerLeadsWithTicket", brokerId, effectiveLeadsFilter],
-    queryFn: async () => {
-      const params = buildParamsFromFilter(effectiveLeadsFilter);
-      const res = await fetch(
-        getServerBaseUrl() +
-          `/api/brokers/${brokerId}/leads-with-ticket?${params.toString()}`,
-      );
-      if (!res.ok) throw new Error("Erro ao buscar leads do corretor");
-      return await res.json();
-    },
-    enabled: isHydrated && !!brokerId && !isNaN(brokerId),
-  });
-
   // --------- Pipeline config ----------
   const { data: pipelineConfig } = useQuery<{
     pipeline_id: number;
@@ -258,6 +285,12 @@ export function BrokerProfilePage() {
     lostLeadsFilterOverride,
     globalFilter,
   );
+  console.log("lost-leads enabled?", {
+    isHydrated,
+    brokerId,
+    brokerIdNumberCheck: !isNaN(brokerId as any),
+    effectiveLostLeadsFilter,
+  });
   const {
     data: lostLeadsData,
     isLoading: isLoadingLostLeads,
@@ -271,12 +304,14 @@ export function BrokerProfilePage() {
       const res = await fetch(
         getServerBaseUrl() +
           `/api/brokers/${brokerId}/lost-leads?${params.toString()}`,
+        { cache: "no-store" }
       );
       if (!res.ok) throw new Error("Erro ao buscar leads perdidos");
       return await res.json();
     },
     enabled: isHydrated && !!brokerId && !isNaN(brokerId),
-    staleTime: 5 * 60 * 1000,
+    staleTime: 0,
+    refetchOnMount: "always",
     retry: 2,
   });
 
@@ -323,15 +358,45 @@ export function BrokerProfilePage() {
     );
   }, [etapasCount]);
 
+
+  const leadsRecebidos = React.useMemo(() => {
+    // "Leads recebidos" deve refletir a etapa inicial do funil (primeira etapa do pipeline).
+    // Faz fallback para nomes comuns e, por fim, para totalLeads.
+    if (!stageAnalysisData || Object.keys(stageAnalysisData).length === 0) return 0;
+
+    const candidates = [
+      "Leads Recebidos",
+      "Leads recebidos",
+      "Lead Recebido",
+      "Lead recebido",
+      "Novo Lead",
+      "Novo lead",
+      "Lead",
+    ];
+
+    for (const key of candidates) {
+      const v = stageAnalysisData[key]?.count;
+      if (typeof v === "number") return v;
+    }
+
+    // Se não achou um nome conhecido, usa o maior stage como proxy (evita 0 enganoso)
+    const maxStage = Object.values(stageAnalysisData).reduce((max: number, s: any) => {
+      const c = typeof s?.count === "number" ? s.count : 0;
+      return c > max ? c : max;
+    }, 0);
+
+    return maxStage || totalLeads;
+  }, [stageAnalysisData, totalLeads]);
+
   const wonLeads = React.useMemo(
     () => stageAnalysisData["Venda Ganha"]?.count || 0,
     [stageAnalysisData],
   );
 
-  const overallConversionRate = React.useMemo(
-    () => (totalLeads > 0 ? (wonLeads / totalLeads) * 100 : 0),
-    [totalLeads, wonLeads],
-  );
+  const taxaConversaoReal = React.useMemo(() => {
+    const denom = leadsRecebidos > 0 ? leadsRecebidos : totalLeads;
+    return denom > 0 ? (wonLeads / denom) * 100 : 0;
+  }, [wonLeads, leadsRecebidos, totalLeads]);
 
   const funnelData = React.useMemo(() => {
     if (!etapasCount || Object.keys(etapasCount).length === 0) return [];
@@ -348,7 +413,7 @@ export function BrokerProfilePage() {
   const isTVScreen =
     window.screen.width >= 1920 && window.screen.height >= 1080;
 
-  if (brokerErr || pointsErr || leadsErr) {
+  if (brokerErr || pointsErr) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-400">
         Erro ao carregar dados do corretor. Tente mudar o período ou recarregar.
@@ -364,7 +429,7 @@ export function BrokerProfilePage() {
         <div className="relative px-4 sm:px-6 lg:px-8 py-6">
           <div className="flex items-center justify-between mb-6">
             <button
-              onClick={() => navigate("/ranking")}
+              onClick={() => navigate("/")}
               className="group flex items-center gap-3 px-4 py-2 rounded-lg bg-gray-800/50 hover:bg-gray-700/50 border border-gray-600/50 hover:border-gray-500/50 transition-all duration-200"
             >
               <ArrowLeft className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors" />
@@ -455,14 +520,13 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.vendas_realizadas &&
-                    brokerPoints?.vendas_realizadas > 0 &&
+                    {brokerPoints?.vendas_fechadas &&
+                    brokerPoints?.vendas_fechadas > 0 &&
                     (brokerPoints?.ticket_medio || 0) > 0
                       ? `R$ ${((brokerPoints?.ticket_medio || 0) / 1000).toFixed(0)}k`
                       : "R$ 0"}
                   </p>
                 </Card>
-
                 <Card className="p-6 bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-sm border-gray-700/50 hover:border-gray-600/50 transition-all duration-200">
                   <div className="flex items-center gap-3 mb-4">
                     <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
@@ -476,8 +540,8 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {leadsData?.vgv_mes
-                      ? `R$ ${((leadsData?.vgv_mes || 0) / 1000).toFixed(0)}k`
+                    {brokerPoints?.vgv_periodo
+                      ? `R$ ${((brokerPoints?.vgv_periodo || 0) / 1000).toFixed(0)}k`
                       : "R$ 0"}
                   </p>
                 </Card>
@@ -495,7 +559,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {weeklyPerformanceData?.oportunidades_perdidas || 0}
+                    {brokerPoints?.leads_perdidos || 0}
                   </p>
                 </Card>
 
@@ -529,9 +593,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {brokerPoints?.vendas_realizadas && brokerPoints?.vendas_realizadas > 0 && brokerPoints?.taxa_conversao
-                      ? `${brokerPoints.taxa_conversao.toFixed(1)}%`
-                      : "0%"}
+                    {taxaConversaoReal > 0 ? `${taxaConversaoReal.toFixed(1)}%` : "0%"}
                   </p>
                   <p className="text-xs text-gray-500 mt-1">
                     vendas ganhas / leads recebidos
@@ -551,7 +613,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white">
-                    {weeklyPerformanceData?.leads_captados || 0}
+                    {leadsRecebidos}
                   </p>
                 </Card>
 
@@ -585,7 +647,7 @@ export function BrokerProfilePage() {
                     </div>
                   </div>
                   <p className="text-2xl font-bold text-white font-mono">
-                    {inactivityData?.inactivity_time || "00:00:00"}
+                    {formatInactivityTime(inactivityData?.inactivity_time)}
                   </p>
                 </Card>
               </div>
@@ -608,13 +670,7 @@ export function BrokerProfilePage() {
                   onFilterChange={async (filter) => {
                     setSalesFunnelFilterOverride(filter);
                     queryClient.invalidateQueries({
-                      queryKey: ["brokerPoints", brokerId],
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerLeadsWithTicket", brokerId],
-                    });
-                    queryClient.invalidateQueries({
-                      queryKey: ["brokerWeeklyPerformance", brokerId],
+                      queryKey: ["brokerLeadsEtapasCount", brokerId],
                     });
                   }}
                   compact={true}
@@ -670,13 +726,7 @@ export function BrokerProfilePage() {
                       onFilterChange={async (filter) => {
                         setLostLeadsFilterOverride(filter);
                         queryClient.invalidateQueries({
-                          queryKey: ["brokerPoints", brokerId],
-                        });
-                        queryClient.invalidateQueries({
-                          queryKey: ["brokerLeadsWithTicket", brokerId],
-                        });
-                        queryClient.invalidateQueries({
-                          queryKey: ["brokerWeeklyPerformance", brokerId],
+                          queryKey: ["brokerLostLeads", brokerId],
                         });
                       }}
                       compact={true}
@@ -699,13 +749,7 @@ export function BrokerProfilePage() {
                     onFilterChange={async (filter) => {
                       setHeatmapFilterOverride(filter);
                       queryClient.invalidateQueries({
-                        queryKey: ["brokerPoints", brokerId],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["brokerLeadsWithTicket", brokerId],
-                      });
-                      queryClient.invalidateQueries({
-                        queryKey: ["brokerWeeklyPerformance", brokerId],
+                        queryKey: ["brokerHeatmap", brokerId],
                       });
                     }}
                     showFilter={true}

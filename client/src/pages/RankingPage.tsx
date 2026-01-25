@@ -289,6 +289,7 @@ export function RankingPage() {
               activeBrokers={metrics?.activeBrokers || 0}
               averagePoints={metrics?.maxPoints || 0}
               totalSales={metrics?.totalSales || 0}
+              countTotalSales={metrics?.countTotalSales || 0}
               isLoading={isLoadingMetrics}
             />
           </div>

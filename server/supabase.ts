@@ -70,6 +70,8 @@ export async function getBrokerRankings(
     // Obter IDs dos pipelines disponíveis
     const availablePipelineIds = getPipelineIds(configData);
 
+    console.log(availablePipelineIds)
+
     if (availablePipelineIds.length === 0) {
       console.error("Nenhum pipeline disponível encontrado");
       return [];
@@ -120,6 +122,10 @@ export async function getBrokerRankings(
     const periodStart = new Date(targetYear, targetMonth - 1, 1);
     const periodEnd = new Date(targetYear, targetMonth, 0, 23, 59, 59, 999);
 
+    // Converter para unix timestamp (SEGUNDOS)
+    const periodStartUnix = Math.floor(periodStart.getTime() / 1000);
+    const periodEndUnix = Math.floor(periodEnd.getTime() / 1000);
+
     console.log(`Calculando rankings para ${targetMonth}/${targetYear}`);
 
     // Transform the data to flatten the broker information and add metrics based on lead creation month
@@ -138,7 +144,7 @@ export async function getBrokerRankings(
         const { data: pointsData } = await supabase
           .from("broker_points")
           .select(
-            "id, pontos, vendas_realizadas, leads_perdidos, leads_descartados, total_leads",
+            "id, pontos, leads_perdidos, leads_descartados, total_leads, vendas_realizadas",
           )
           .eq("id", item.id)
           .eq("company_id", companyId)
@@ -148,10 +154,39 @@ export async function getBrokerRankings(
           .limit(1)
           .maybeSingle();
 
+        if (!pointsData) return null;
+
+        let vendasRealizadas = pointsData.vendas_realizadas || 0;
+
+        const { count, error } = await supabase
+          .from("leads_com_data_unix")
+          .select("id", { count: "exact", head: true })
+          .eq("responsavel_id", item.id)
+          .eq("company_id", companyId)
+          .neq("pipeline_id", 8865067)
+          .gte("data_venda_unix", periodStartUnix)
+          .lte("data_venda_unix", periodEndUnix);
+
+
+        console.log(`
+          SELECT COUNT(id) AS vendas_realizadas
+          FROM leads_com_data_unix
+          WHERE responsavel_id = ${item.id}
+            AND company_id = ${companyId}
+            AND pipeline_id = 11652064
+            AND data_venda_unix BETWEEN ${periodStartUnix} AND ${periodEndUnix};
+          `);
+
+        if (error) {
+          console.error("Erro ao contar vendas realizadas:", error);
+        } else {
+          vendasRealizadas = count || 0;
+        }
+
         // Calcular taxa de conversão baseada nos leads que entraram no mês
         const taxaConversao =
-          pointsData?.total_leads > 0
-            ? (pointsData?.vendas_realizadas / pointsData?.total_leads) * 100
+          pointsData.total_leads > 0
+            ? (vendasRealizadas / pointsData.total_leads) * 100
             : 0;
 
         return {
@@ -167,7 +202,7 @@ export async function getBrokerRankings(
           updated_at: item.updated_at,
           pontos: pointsData?.pontos || 0,
           total_leads: pointsData?.total_leads,
-          vendas_realizadas: pointsData?.vendas_realizadas,
+          vendas_realizadas: vendasRealizadas,
           leads_perdidos: pointsData?.leads_perdidos,
           leads_descartados: pointsData?.leads_descartados,
           propostas_enviadas: propostasEnviadas,
@@ -220,7 +255,6 @@ export async function getBrokerRankings(
   }
 }
 
-// Nova função auxiliar para contar propostas enviadas no mês usando activities
 async function getPropostasEnviadasNoMes(
   brokerId: number,
   companyId: string,
@@ -229,57 +263,25 @@ async function getPropostasEnviadasNoMes(
   availablePipelineIds: number[],
 ): Promise<number> {
   try {
-    // Buscar todas as etapas de proposta dos pipelines da empresa
-    const { data: proposalStages } = await supabase
-      .from("stages_list")
-      .select("stage_id, stage_name")
+    const startUnix = Math.floor(periodStart.getTime() / 1000);
+    const endUnix = Math.floor(periodEnd.getTime() / 1000);
+
+    const { count, error } = await supabase
+      .from("leads_com_proposta")
+      .select("id", { count: "exact", head: true })
+      .eq("responsavel_id", brokerId)
       .eq("company_id", companyId)
       .in("pipeline_id", availablePipelineIds)
-      .ilike("stage_name", "%proposta%");
+      .gte("data_proposta_unix", startUnix)
+      .lte("data_proposta_unix", endUnix);
 
-    if (!proposalStages || proposalStages.length === 0) {
+    if (error) {
+      console.error("Erro ao buscar propostas do mês:", error);
       return 0;
     }
 
-    const proposalStageIds = proposalStages.map((stage) => stage.stage_id);
+    return count ?? 0;
 
-    // Buscar atividades de mudança de status para etapas de proposta no período
-    const { data: activities } = await supabase
-      .from("activities")
-      .select("id, valor_novo")
-      .eq("user_id", brokerId)
-      .eq("company_id", companyId)
-      .eq("tipo", "mudança_status")
-      .gte("criado_em", periodStart.toISOString())
-      .lte("criado_em", periodEnd.toISOString());
-
-    if (!activities || activities.length === 0) {
-      return 0;
-    }
-
-    let propostasCount = 0;
-
-    // Analisar cada atividade para ver se moveu para etapa de proposta
-    for (const activity of activities) {
-      try {
-        let valorNovo;
-        if (typeof activity.valor_novo === "string") {
-          valorNovo = JSON.parse(activity.valor_novo);
-        } else {
-          valorNovo = activity.valor_novo;
-        }
-
-        const leadStatus = valorNovo?.[0]?.lead_status;
-        if (leadStatus && proposalStageIds.includes(leadStatus.id)) {
-          propostasCount++;
-        }
-      } catch (parseError) {
-        // Ignorar erros de parse
-        continue;
-      }
-    }
-
-    return propostasCount;
   } catch (error) {
     console.error("Erro ao contar propostas do mês:", error);
     return 0;
@@ -549,30 +551,54 @@ async function calculateBrokerMetricsAllPipelines(
 
     // Calcular métricas
     const totalLeads = allLeads.length;
-    const vendasFechadas = allLeads.filter((lead) => lead.status_id === 142);
-    const leadsPermitidos = allLeads.filter((lead) => lead.status_id === 143);
 
-    const vgvPeriodo = vendasFechadas.reduce((sum, lead) => {
-      const valor =
-        typeof lead.valor === "number"
-          ? lead.valor
-          : parseFloat(lead.valor?.toString() || "0") || 0;
-      return sum + valor;
-    }, 0);
+    let vendasFechadasCount = 0;
+    let vgvPeriodo = 0;
+
+    // Fonte de verdade
+    const { data, error } = await supabase
+      .from("leads_com_data_unix")
+      .select("valor")
+      .eq("responsavel_id", brokerId)
+      .eq("company_id", companyId)
+      .eq("pipeline_id", 11652064)
+      .neq("pipeline_id", "8865067")
+      .neq("valor", 0)
+      .gte("data_venda_unix", Math.floor(currentPeriodStart.getTime() / 1000))
+      .lte("data_venda_unix", Math.floor(currentPeriodEnd.getTime() / 1000));
+    if (error) {
+      console.error("Erro ao buscar vendas realizadas:", error);
+    } else if (data?.length) {
+      vendasFechadasCount = data.length;
+
+      vgvPeriodo = data.reduce((sum, lead) => {
+        const valor =
+          typeof lead.valor === "number"
+            ? lead.valor
+            : parseFloat(lead.valor?.toString() || "0") || 0;
+        return sum + valor;
+      }, 0);
+    }
 
     // Ticket médio só deve existir se houver vendas fechadas
     const ticketMedio =
-      vendasFechadas.length > 0 ? parseFloat((vgvPeriodo / vendasFechadas.length).toFixed(2)) : 0;
-    // Taxa de conversão só deve existir se houver vendas fechadas
+      vendasFechadasCount > 0
+        ? parseFloat((vgvPeriodo / vendasFechadasCount).toFixed(2))
+        : 0;
+
     const taxaConversao =
-      vendasFechadas.length > 0 && totalLeads > 0 ? parseFloat(((vendasFechadas.length / totalLeads) * 100).toFixed(2)) : 0;
+      vendasFechadasCount > 0 && totalLeads > 0
+        ? parseFloat(((vendasFechadasCount / totalLeads) * 100).toFixed(2))
+        : 0;
+
+    const leadsPermitidos = allLeads.filter( (lead) => lead.status_id === 143, );
 
     return {
-      vendas_fechadas: vendasFechadas.length,
+      vendas_fechadas: vendasFechadasCount,
       oportunidades_perdidas: leadsPermitidos.length,
       vgv_periodo: vgvPeriodo,
       ticket_medio: ticketMedio,
-      taxa_conversao: parseFloat(taxaConversao.toFixed(2)),
+      taxa_conversao: taxaConversao,
       total_leads: totalLeads,
     };
   } catch (error) {
@@ -581,7 +607,6 @@ async function calculateBrokerMetricsAllPipelines(
   }
 }
 
-// Função para calcular taxa de conversão correta
 export async function calculateBrokerConversionRate(
   brokerId: number,
   companyId: string,
@@ -2082,6 +2107,96 @@ export async function getTotalSales(
     return totalSales;
   } catch (error) {
     console.error("Erro na função getTotalSales:", error);
+    return 0;
+  }
+}
+
+export async function getCountTotalSales(
+  companyId: string,
+  pipelineId?: number,
+  startDate?: string,
+  endDate?: string,
+) {
+  try {
+    if (!companyId) {
+      console.error("companyId é obrigatório");
+      return 0;
+    }
+
+    // Buscar configuração dos pipelines
+    const { data: configData, error: configError } = await supabase
+      .schema("cf_kommo")
+      .from("kommo_config")
+      .select("pipeline_id")
+      .eq("company_id", companyId)
+      .single();
+
+    if (configError || !configData?.pipeline_id) {
+      console.error("Erro ao buscar configuração dos pipelines:", configError);
+      return 0;
+    }
+
+    const availablePipelineIds = getPipelineIds(configData);
+
+    if (availablePipelineIds.length === 0) {
+      console.error("Nenhum pipeline disponível encontrado");
+      return 0;
+    }
+
+    // Query base usando COUNT
+    let query = supabase
+      .from("leads_com_data_unix")
+      .select("id", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .neq("valor", 0)
+      .neq("pipeline_id", 8865067); // 👈 removido string, pipeline é number
+
+    // Filtrar pipeline
+    if (pipelineId && !isNaN(pipelineId)) {
+      query = query.eq("pipeline_id", pipelineId);
+    } else {
+      query = query.in("pipeline_id", availablePipelineIds);
+    }
+
+    // Filtro de período (unix)
+    if (startDate && endDate) {
+      try {
+        const startUnix = Math.floor(new Date(startDate).getTime() / 1000);
+        const endUnix = Math.floor(new Date(endDate).getTime() / 1000);
+
+        if (!isNaN(startUnix) && !isNaN(endUnix)) {
+          query = query
+            .gte("data_venda_unix", startUnix)
+            .lte("data_venda_unix", endUnix);
+        }
+      } catch (dateError) {
+        console.error("Erro ao processar datas:", dateError);
+      }
+    }
+
+    // Buscar corretores ativos
+    const { data: activeBrokers } = await supabase
+      .from("brokers")
+      .select("id")
+      .eq("company_id", companyId)
+      .eq("active", true)
+      .eq("cargo", "Corretor");
+
+    if (activeBrokers?.length) {
+      const activeBrokerIds = activeBrokers.map(b => b.id);
+      query = query.in("responsavel_id", activeBrokerIds);
+    }
+
+    const { count, error } = await query;
+
+    if (error) {
+      console.error("Erro ao contar vendas totais:", error);
+      return 0;
+    }
+
+    return count || 0;
+  } catch (error) {
+    console.error("Erro na função getCountTotalSales:", error);
     return 0;
   }
 }

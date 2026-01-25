@@ -7,6 +7,7 @@ interface MetricSummaryCardsProps {
   activeBrokers: number;
   averagePoints: number;
   totalSales: number;
+  countTotalSales: number;
   isLoading: boolean;
 }
 
@@ -15,6 +16,7 @@ export function MetricSummaryCards({
   activeBrokers,
   averagePoints,
   totalSales,
+  countTotalSales,
   isLoading,
 }: MetricSummaryCardsProps) {
   if (isLoading) {
@@ -60,11 +62,18 @@ export function MetricSummaryCards({
       bgColor: "bg-purple-500/10",
     },
     {
-      title: "Vendas Totais",
+      title: "Valor Total",
       value: formatCurrency(totalSales),
       icon: DollarSign,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
+    },
+    {
+      title: "Total de Vendas",
+      value: countTotalSales,
+      icon: TrendingUp,
+      color: "text-green-500",
+      bgColor: "bg-green-500/10",
     },
   ];
 
