@@ -2007,7 +2007,6 @@ export async function getTotalSales(
   endDate?: string,
 ) {
   try {
-    // Validar companyId
     if (!companyId) {
       console.error("companyId é obrigatório");
       return 0;
@@ -2028,43 +2027,43 @@ export async function getTotalSales(
 
     const availablePipelineIds = getPipelineIds(configData);
 
-    if (availablePipelineIds.length === 0) {
+    if (!availablePipelineIds.length) {
       console.error("Nenhum pipeline disponível encontrado");
       return 0;
     }
 
-    // Buscar vendas fechadas (status_id = 142)
+    // Query base (MESMA do count, mas buscando valor)
     let query = supabase
-      .from("leads")
+      .from("leads_com_data_unix")
       .select("valor")
       .eq("company_id", companyId)
-      .eq("status_id", 142);
+      .neq("valor", 0)
+      .neq("pipeline_id", 8865067);
 
-    // Filtrar por pipeline específico ou todos os disponíveis
+    // Filtrar pipeline
     if (pipelineId && !isNaN(pipelineId)) {
       query = query.eq("pipeline_id", pipelineId);
     } else {
       query = query.in("pipeline_id", availablePipelineIds);
     }
 
-    // Aplicar filtro de data se fornecido
+    // Filtro de período (unix)
     if (startDate && endDate) {
-      // Validar se as datas são strings válidas
       try {
-        const start = new Date(startDate);
-        const end = new Date(endDate);
+        const startUnix = Math.floor(new Date(startDate).getTime() / 1000);
+        const endUnix = Math.floor(new Date(endDate).getTime() / 1000);
 
-        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
-          query = query.gte("criado_em", startDate).lte("criado_em", endDate);
-        } else {
-          console.error("Datas inválidas fornecidas:", startDate, endDate);
+        if (!isNaN(startUnix) && !isNaN(endUnix)) {
+          query = query
+            .gte("data_venda_unix", startUnix)
+            .lte("data_venda_unix", endUnix);
         }
       } catch (dateError) {
         console.error("Erro ao processar datas:", dateError);
       }
     }
 
-    // Filtrar apenas vendas de corretores ativos
+    // Buscar corretores ativos
     const { data: activeBrokers } = await supabase
       .from("brokers")
       .select("id")
@@ -2072,8 +2071,8 @@ export async function getTotalSales(
       .eq("active", true)
       .eq("cargo", "Corretor");
 
-    if (activeBrokers && activeBrokers.length > 0) {
-      const activeBrokerIds = activeBrokers.map((broker) => broker.id);
+    if (activeBrokers?.length) {
+      const activeBrokerIds = activeBrokers.map(b => b.id);
       query = query.in("responsavel_id", activeBrokerIds);
     }
 
@@ -2084,27 +2083,17 @@ export async function getTotalSales(
       return 0;
     }
 
-    if (!data || data.length === 0) {
-      return 0;
-    }
+    if (!data?.length) return 0;
 
-    // Calcular soma total das vendas
-    const totalSales = data.reduce((sum, lead) => {
-      let valor = 0;
+    // Soma total dos valores
+    return data.reduce((total, item) => {
+      const valor =
+        typeof item.valor === "number"
+          ? item.valor
+          : parseFloat(item.valor) || 0;
 
-      if (lead.valor !== null && lead.valor !== undefined) {
-        if (typeof lead.valor === "number") {
-          valor = lead.valor;
-        } else if (typeof lead.valor === "string") {
-          const parsed = parseFloat(lead.valor);
-          valor = isNaN(parsed) ? 0 : parsed;
-        }
-      }
-
-      return sum + valor;
+      return total + valor;
     }, 0);
-
-    return totalSales;
   } catch (error) {
     console.error("Erro na função getTotalSales:", error);
     return 0;

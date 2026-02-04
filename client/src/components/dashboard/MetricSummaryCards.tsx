@@ -37,14 +37,13 @@ export function MetricSummaryCards({
     );
   }
 
-  const formatCurrency = (value: number) => {
+  
+  function formatCurrency(value: number) {
     return new Intl.NumberFormat("pt-BR", {
       style: "currency",
       currency: "BRL",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
     }).format(value);
-  };
+  }
 
   const metrics = [
     {
@@ -63,7 +62,7 @@ export function MetricSummaryCards({
     },
     {
       title: "Valor Total",
-      value: formatCurrency(totalSales),
+      value: formatCurrency(totalSales / 100),
       icon: DollarSign,
       color: "text-yellow-500",
       bgColor: "bg-yellow-500/10",
